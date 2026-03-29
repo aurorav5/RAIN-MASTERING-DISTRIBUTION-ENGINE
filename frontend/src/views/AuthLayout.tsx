@@ -17,13 +17,13 @@ export function AuthLayout({ children }: Props) {
   }, [])
 
   return (
-    <div className="min-h-screen bg-[#08070F] flex items-center justify-center relative overflow-hidden">
+    <div className="min-h-screen bg-rain-black flex items-center justify-center relative overflow-hidden">
       {/* Ambient background */}
       <div ref={bgRef} className="ambient-bg" />
 
       {/* Glow orbs */}
-      <div className="hero-glow bg-purple-500" style={{ top: '15%', left: '25%', opacity: 0.1 }} />
-      <div className="hero-glow bg-pink-500" style={{ bottom: '20%', right: '20%', animationDelay: '-10s', opacity: 0.06 }} />
+      <div className="hero-glow bg-teal-500" style={{ top: '15%', left: '25%', opacity: 0.1 }} />
+      <div className="hero-glow bg-emerald-500" style={{ bottom: '20%', right: '20%', animationDelay: '-10s', opacity: 0.06 }} />
 
       <div className="relative z-10 w-full max-w-md px-6">
         {/* Logo */}

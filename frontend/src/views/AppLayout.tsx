@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom'
 import { TopBar } from '@/components/layout/TopBar'
 import { TabBar } from '@/components/layout/TabBar'
 import { TransportBar } from '@/components/transport/TransportBar'
+import { StatusFooter } from '@/components/layout/StatusFooter'
 
 export default function AppLayout() {
   const bgRef = useRef<HTMLDivElement>(null)
@@ -19,11 +20,8 @@ export default function AppLayout() {
   }, [])
 
   return (
-    <div className="min-h-screen h-screen bg-[#08070F] text-rain-text flex flex-col overflow-hidden relative">
-      {/* Ambient background */}
+    <div className="min-h-screen h-screen bg-rain-black text-rain-text flex flex-col overflow-hidden relative">
       <div ref={bgRef} className="ambient-bg" />
-
-      {/* App chrome */}
       <div className="relative z-10 flex flex-col h-full">
         <TopBar />
         <TabBar />
@@ -31,6 +29,7 @@ export default function AppLayout() {
         <main className="flex-1 overflow-auto page-enter">
           <Outlet />
         </main>
+        <StatusFooter />
       </div>
     </div>
   )

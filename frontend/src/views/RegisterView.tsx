@@ -84,7 +84,7 @@ export default function RegisterView() {
 
         <p className="text-rain-dim text-sm text-center">
           Already have an account?{' '}
-          <Link to="/login" className="text-rain-purple hover:text-rain-magenta transition-colors font-semibold">
+          <Link to="/login" className="text-rain-teal hover:text-rain-cyan transition-colors font-semibold">
             Sign in
           </Link>
         </p>

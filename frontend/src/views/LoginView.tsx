@@ -74,7 +74,7 @@ export default function LoginView() {
 
         <p className="text-rain-dim text-sm text-center">
           No account?{' '}
-          <Link to="/register" className="text-rain-purple hover:text-rain-magenta transition-colors font-semibold">
+          <Link to="/register" className="text-rain-teal hover:text-rain-cyan transition-colors font-semibold">
             Start free
           </Link>
         </p>

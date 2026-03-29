@@ -68,8 +68,8 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <Link to="/login" className="btn-ghost text-sm py-2 px-4">Sign In</Link>
-            <Link to="/register" className="btn-primary text-sm py-2 px-4">Start Free</Link>
+            <Link to="/login" className="btn-ghost text-sm py-2 px-3">Sign In</Link>
+            <Link to="/register" className="btn-primary text-sm py-2 px-3">Start Free</Link>
           </div>
         </div>
       </nav>
@@ -77,8 +77,8 @@ export default function LandingPage() {
       {/* ========= HERO ========= */}
       <section className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-16">
         {/* Glow orbs */}
-        <div className="hero-glow bg-purple-500" style={{ top: '10%', left: '20%' }} />
-        <div className="hero-glow bg-pink-500" style={{ top: '30%', right: '15%', animationDelay: '-7s' }} />
+        <div className="hero-glow bg-teal-500" style={{ top: '10%', left: '20%' }} />
+        <div className="hero-glow bg-emerald-500" style={{ top: '30%', right: '15%', animationDelay: '-7s' }} />
         <div className="hero-glow bg-cyan-500" style={{ bottom: '20%', left: '40%', animationDelay: '-14s', opacity: 0.08 }} />
 
         {/* Grid overlay */}
@@ -168,7 +168,7 @@ export default function LandingPage() {
       <section id="how-it-works" className="relative py-32 px-6">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-20">
-            <p className="text-xs text-rain-purple font-semibold tracking-[0.2em] uppercase mb-3">Pipeline</p>
+            <p className="text-xs text-rain-teal font-semibold tracking-[0.2em] uppercase mb-3">Pipeline</p>
             <h2 className="text-3xl md:text-4xl font-bold">Upload. Master. Distribute.</h2>
             <p className="text-rain-dim mt-4 max-w-lg mx-auto">Three steps from raw audio to every streaming platform. AI-powered analysis, deterministic rendering, cryptographic certification.</p>
           </div>
@@ -182,7 +182,7 @@ export default function LandingPage() {
               <div key={item.step} className="feature-card group">
                 <div className="flex items-center gap-3 mb-6">
                   <span className="text-3xl font-black text-gradient-infinity">{item.step}</span>
-                  <item.icon size={24} className="text-rain-purple" />
+                  <item.icon size={24} className="text-rain-teal" />
                 </div>
                 <h3 className="text-lg font-bold mb-3">{item.title}</h3>
                 <p className="text-sm text-rain-dim leading-relaxed">{item.desc}</p>
@@ -196,7 +196,7 @@ export default function LandingPage() {
       <section id="features" className="relative py-32 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-20">
-            <p className="text-xs text-rain-purple font-semibold tracking-[0.2em] uppercase mb-3">Capabilities</p>
+            <p className="text-xs text-rain-teal font-semibold tracking-[0.2em] uppercase mb-3">Capabilities</p>
             <h2 className="text-3xl md:text-4xl font-bold">Built for Professionals</h2>
             <p className="text-rain-dim mt-4 max-w-lg mx-auto">Every feature designed for labels, producers, and engineers who demand precision, provenance, and speed.</p>
           </div>
@@ -204,8 +204,8 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURES.map((f) => (
               <div key={f.title} className="feature-card group">
-                <div className="w-12 h-12 rounded-xl glass flex items-center justify-center mb-5 group-hover:shadow-[0_0_20px_rgba(139,92,246,0.2)] transition-shadow">
-                  <f.icon size={22} className="text-rain-purple" />
+                <div className="w-12 h-12 rounded-xl glass flex items-center justify-center mb-5 group-hover:shadow-[0_0_20px_rgba(0,212,170,0.2)] transition-shadow">
+                  <f.icon size={22} className="text-rain-teal" />
                 </div>
                 <h3 className="text-base font-bold mb-3">{f.title}</h3>
                 <p className="text-sm text-rain-dim leading-relaxed">{f.desc}</p>
@@ -218,7 +218,7 @@ export default function LandingPage() {
       {/* ========= SUNO → RAIN → SPOTIFY ========= */}
       <section className="relative py-32 px-6">
         <div className="max-w-4xl mx-auto text-center">
-          <p className="text-xs text-rain-purple font-semibold tracking-[0.2em] uppercase mb-3">The Missing Link</p>
+          <p className="text-xs text-rain-teal font-semibold tracking-[0.2em] uppercase mb-3">The Missing Link</p>
           <h2 className="text-3xl md:text-4xl font-bold mb-6">
             From <span className="text-gradient-warm">Suno</span> to <span className="text-gradient-cool">Spotify</span>
           </h2>
@@ -230,15 +230,15 @@ export default function LandingPage() {
             {['Suno', 'Udio', 'Stems'].map((src) => (
               <div key={src} className="glass px-6 py-3 rounded-xl text-sm font-semibold text-rain-silver">{src}</div>
             ))}
-            <ArrowRight size={20} className="text-rain-purple" />
-            <div className="glass px-8 py-3 rounded-xl border-rain-purple/30 border">
+            <ArrowRight size={20} className="text-rain-teal" />
+            <div className="glass px-8 py-3 rounded-xl border-rain-teal/30 border">
               <span className="text-lg font-black">
                 <span className="rain-logo-r">R</span>
                 <span className="rain-logo-inf">&infin;</span>
                 <span className="rain-logo-n">N</span>
               </span>
             </div>
-            <ArrowRight size={20} className="text-rain-purple" />
+            <ArrowRight size={20} className="text-rain-teal" />
             {['Spotify', 'Apple Music', 'Tidal', '150+ DSPs'].map((dst) => (
               <div key={dst} className="glass px-6 py-3 rounded-xl text-sm font-semibold text-rain-silver">{dst}</div>
             ))}
@@ -250,7 +250,7 @@ export default function LandingPage() {
       <section id="pricing" className="relative py-32 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <p className="text-xs text-rain-purple font-semibold tracking-[0.2em] uppercase mb-3">Pricing</p>
+            <p className="text-xs text-rain-teal font-semibold tracking-[0.2em] uppercase mb-3">Pricing</p>
             <h2 className="text-3xl md:text-4xl font-bold">Scale With Your Craft</h2>
             <p className="text-rain-dim mt-4">Annual billing saves ~20%. All tiers include RAIN-CERT provenance.</p>
           </div>
@@ -267,7 +267,7 @@ export default function LandingPage() {
                 <ul className="space-y-2 mb-6">
                   {t.features.map((f) => (
                     <li key={f} className="text-xs text-rain-silver flex items-start gap-2">
-                      <Zap size={10} className="text-rain-purple mt-0.5 shrink-0" />
+                      <Zap size={10} className="text-rain-teal mt-0.5 shrink-0" />
                       {f}
                     </li>
                   ))}
