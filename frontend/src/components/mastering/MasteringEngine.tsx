@@ -11,10 +11,10 @@ export function MasteringEngine({ onMasterNow, onReset, disabled }: MasteringEng
   const { status } = useSessionStore()
 
   const statusColor: Record<string, string> = {
-    idle: '#4A4565',
+    idle: '#3A4A3A',
     uploading: '#FFB347',
-    analyzing: '#8B5CF6',
-    processing: '#D946EF',
+    analyzing: '#00D4AA',
+    processing: '#00E5C8',
     complete: '#4AFF8A',
     failed: '#FF4444',
   }
@@ -57,7 +57,7 @@ export function MasteringEngine({ onMasterNow, onReset, disabled }: MasteringEng
             className={`flex items-center gap-1.5 px-4 py-2 rounded-md font-mono text-[11px] font-bold transition-all ${
               disabled || isProcessing
                 ? 'bg-rain-muted text-rain-dim cursor-not-allowed'
-                : 'bg-gradient-to-r from-rain-purple to-rain-magenta text-white shadow-glow-purple hover:shadow-glow-magenta cursor-pointer'
+                : 'bg-gradient-to-r from-rain-teal to-rain-cyan text-rain-black shadow-glow-teal hover:shadow-glow-cyan cursor-pointer'
             }`}
           >
             {isProcessing ? (

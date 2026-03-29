@@ -21,7 +21,7 @@ export default function ExportTab() {
   const canExport = status === 'complete' && tierGte('spark')
 
   return (
-    <div className="p-4 space-y-4 max-w-2xl">
+    <div className="p-2 space-y-3 w-full">
       {/* Format selector */}
       <div className="panel-card">
         <div className="panel-card-header">

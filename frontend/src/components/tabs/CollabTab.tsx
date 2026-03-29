@@ -6,7 +6,7 @@ export default function CollabTab() {
   const canCollab = tierGte('studio_pro')
 
   return (
-    <div className="p-4 space-y-4 max-w-[1200px] mx-auto page-enter">
+    <div className="p-2 space-y-3 w-full page-enter">
       <div className="flex items-center gap-2 mb-4">
         <Users size={14} className="text-rain-teal" />
         <span className="text-xs font-semibold text-rain-teal uppercase tracking-widest">Collaboration</span>

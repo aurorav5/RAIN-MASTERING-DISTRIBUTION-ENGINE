@@ -17,7 +17,7 @@ export default function TestTab() {
   const passCount = TESTS.filter(t => t.status === 'pass').length
 
   return (
-    <div className="p-4 space-y-4 max-w-[1000px] mx-auto page-enter">
+    <div className="p-2 space-y-3 w-full page-enter">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <TestTube2 size={14} className="text-rain-teal" />

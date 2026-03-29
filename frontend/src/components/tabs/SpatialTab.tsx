@@ -8,7 +8,7 @@ export default function SpatialTab() {
   const [correlationMode, setCorrelationMode] = useState<'normal' | 'wide' | 'mono'>('normal')
 
   return (
-    <div className="p-4 space-y-4 max-w-2xl">
+    <div className="p-2 space-y-3 w-full">
       {/* M/S Processing */}
       <div className="panel-card">
         <div className="panel-card-header flex items-center justify-between">

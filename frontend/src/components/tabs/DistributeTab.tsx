@@ -65,7 +65,7 @@ export default function DistributeTab() {
   const estRoyalty = selectedPlatforms.size * 60 // $60 per platform per 50k streams rough estimate
 
   return (
-    <div className="p-4 space-y-4 max-w-[1400px] mx-auto page-enter">
+    <div className="p-2 space-y-3 w-full page-enter">
       {/* Distribute header */}
       <div className="flex items-center gap-2">
         <Send size={14} className="text-rain-teal" />

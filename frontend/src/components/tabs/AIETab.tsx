@@ -3,7 +3,7 @@ import { TierGate } from '../common/TierGate'
 export function AIETab() {
   return (
     <TierGate requiredTier="creator" feature="Artist Identity Engine">
-      <div className="p-4 space-y-4">
+      <div className="p-2 space-y-3 w-full">
         <div>
           <p className="text-rain-dim text-xs font-mono mb-2">SESSIONS TOWARD AIE ACTIVATION</p>
           <div className="h-2 bg-rain-panel rounded overflow-hidden">

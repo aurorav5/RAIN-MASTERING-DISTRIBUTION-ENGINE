@@ -23,7 +23,7 @@ export default function QCTab() {
   const overallScore = rainScore?.overall ?? null
 
   return (
-    <div className="p-4 space-y-4 max-w-3xl">
+    <div className="p-2 space-y-3 w-full">
       {/* RAIN Score overview */}
       <div className="panel-card">
         <div className="panel-card-header">

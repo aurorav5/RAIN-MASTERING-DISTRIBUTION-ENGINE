@@ -27,7 +27,7 @@ export default function StemsTab() {
 
   return (
     <TierGate requiredTier="creator" feature="Stem mastering">
-      <div className="p-4 space-y-4">
+      <div className="p-2 space-y-3 w-full">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xs font-mono text-rain-dim tracking-widest uppercase">
             6-Stem Separation — Demucs htdemucs_6s

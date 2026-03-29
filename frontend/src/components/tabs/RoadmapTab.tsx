@@ -84,7 +84,7 @@ export default function RoadmapTab() {
   const [expandedVersion, setExpandedVersion] = useState<string | null>('v6.1')
 
   return (
-    <div className="p-4 space-y-4 max-w-2xl">
+    <div className="p-2 space-y-3 w-full">
       <div className="flex items-center gap-2 mb-2">
         <span className="text-xs font-mono text-rain-dim tracking-widest uppercase">
           Product Roadmap

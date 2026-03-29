@@ -4,6 +4,8 @@ import { useSessionStore } from '@/stores/session'
 import { renderLocal } from '@/hooks/useLocalRender'
 import { api, APIError } from '@/utils/api'
 import { UploadZone } from '../controls/UploadZone'
+import { Waveform } from '../visualizers/Waveform'
+import { Spectrum } from '../visualizers/Spectrum'
 import { SignalChain } from '../mastering/SignalChain'
 import { CreativeMacros } from '../mastering/CreativeMacros'
 import { MeteringPanel } from '../mastering/MeteringPanel'
@@ -29,6 +31,7 @@ export default function MasteringTab() {
   const wsRef = useRef<WebSocket | null>(null)
 
   // Macro state
+  const [vizMode, setVizMode] = useState<'waveform' | 'spectrum' | 'phase'>('waveform')
   const [macros, setMacros] = useState({ brighten: 5.0, glue: 4.2, width: 3.8, punch: 6.1, warmth: 5.5 })
   const [satMode, setSatMode] = useState('tape')
   const [satDrive, setSatDrive] = useState(0.3)
@@ -135,7 +138,7 @@ export default function MasteringTab() {
   }, [])
 
   return (
-    <div className="p-4 space-y-3 max-w-[1600px] mx-auto">
+    <div className="p-2 space-y-2 w-full">
       {/* Row 0: Upload zone (collapsed when file loaded) */}
       {!inputBuffer && (
         <UploadZone onFileSelected={handleFile} disabled={status !== 'idle'} />
@@ -175,11 +178,38 @@ export default function MasteringTab() {
         disabled={!inputBuffer}
       />
 
+      {/* Row 1.5: Visualizer */}
+      <div className="panel-card">
+        <div className="panel-card-header justify-between">
+          <span>Visualizer</span>
+          <div className="flex gap-1">
+            {(['waveform', 'spectrum', 'phase'] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setVizMode(mode)}
+                className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider transition-all ${
+                  vizMode === mode
+                    ? 'bg-rain-teal/10 text-rain-teal border border-rain-teal/20'
+                    : 'text-rain-dim hover:text-rain-text border border-transparent'
+                }`}
+              >
+                {mode === 'waveform' ? 'WAVE FORM' : mode === 'spectrum' ? 'SPECTRUM' : 'PHASE'}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="panel-card-body p-0">
+          {vizMode === 'waveform' && <Waveform height={80} />}
+          {vizMode === 'spectrum' && <Spectrum height={80} />}
+          {vizMode === 'phase' && <Waveform height={80} />}
+        </div>
+      </div>
+
       {/* Row 2: Signal Chain */}
       <SignalChain />
 
       {/* Row 3: Creative Macros + Metering */}
-      <div className="flex gap-3">
+      <div className="flex gap-2">
         <CreativeMacros
           brighten={macros.brighten}
           glue={macros.glue}
@@ -192,7 +222,7 @@ export default function MasteringTab() {
       </div>
 
       {/* Row 4: Analog Modeling + M/S Processing */}
-      <div className="flex gap-3">
+      <div className="flex gap-2">
         <AnalogModeling
           mode={satMode}
           drive={satDrive}

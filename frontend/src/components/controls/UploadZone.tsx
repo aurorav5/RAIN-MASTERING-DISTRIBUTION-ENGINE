@@ -68,7 +68,7 @@ export function UploadZone({
       onClick={() => !disabled && inputRef.current?.click()}
       onMouseMove={onMouseMove}
       className={clsx(
-        'upload-zone min-h-[200px] flex flex-col items-center justify-center gap-4',
+        'upload-zone min-h-[120px] flex flex-col items-center justify-center gap-3',
         dragging && 'dragging',
         disabled && 'opacity-40 cursor-not-allowed',
         error && '!border-rain-red/40',

@@ -2,7 +2,7 @@ import { Disc, Plus, Music2 } from 'lucide-react'
 
 export default function AlbumTab() {
   return (
-    <div className="p-4 space-y-4 max-w-[1200px] mx-auto page-enter">
+    <div className="p-2 space-y-3 w-full page-enter">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Disc size={14} className="text-rain-teal" />
