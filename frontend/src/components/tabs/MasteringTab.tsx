@@ -72,12 +72,10 @@ export default function MasteringTab() {
       } = JSON.parse(evt.data as string)
       setStatus(msg.status as Parameters<typeof setStatus>[0])
       if (msg.status === 'complete' && msg.output_lufs != null) {
-        useSessionStore.getState().setResult(
-          msg.output_lufs,
-          msg.output_true_peak ?? 0,
-          msg.rain_score as Parameters<typeof useSessionStore.getState().setResult>[2] ?? { overall: 0, spotify: 0, apple_music: 0, youtube: 0, tidal: 0, codec_penalty: {} },
-          ''
-        )
+        const score = (msg.rain_score ?? { overall: 0, spotify: 0, apple_music: 0, youtube: 0, tidal: 0, codec_penalty: {} }) as {
+          overall: number; spotify: number; apple_music: number; youtube: number; tidal: number; codec_penalty: Record<string, number>
+        }
+        useSessionStore.getState().setResult(msg.output_lufs, msg.output_true_peak ?? 0, score, '')
       }
     }
     ws.onerror = () => setError('RAIN-E300: WebSocket error')
