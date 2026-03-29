@@ -6,10 +6,13 @@ export default {
       colors: {
         rain: {
           bg: '#0D0B1A',
+          black: '#08070F',
+          dark: '#0A0918',
           surface: '#141225',
           panel: '#1C1835',
           border: '#2A2545',
           muted: '#4A4565',
+          silver: '#B8B5C8',
           dim: '#7A7595',
           text: '#E8E6F0',
           white: '#F0F0F0',

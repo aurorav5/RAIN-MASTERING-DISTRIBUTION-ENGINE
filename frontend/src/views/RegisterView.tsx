@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { AuthLayout } from './AuthLayout'
-import { Button } from '@/components/common/Button'
 import { useAuthStore, type Tier } from '@/stores/auth'
 import { api, APIError } from '@/utils/api'
 
@@ -22,7 +21,7 @@ export default function RegisterView() {
     try {
       const res = await api.auth.register(email, password)
       setTokens(res.access_token, res.refresh_token, res.tier as Tier, res.user_id)
-      void navigate('/')
+      void navigate('/app')
     } catch (err) {
       setError(err instanceof APIError ? err.message : 'Registration failed')
     } finally {
@@ -32,25 +31,64 @@ export default function RegisterView() {
 
   return (
     <AuthLayout>
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-        {(['EMAIL', 'PASSWORD', 'CONFIRM'] as const).map((label, i) => (
-          <div key={label}>
-            <label className="text-rain-dim text-xs font-mono block mb-1">{label}</label>
+      <div className="space-y-6">
+        <div className="text-center">
+          <h2 className="text-xl font-bold">Create your studio</h2>
+          <p className="text-sm text-rain-dim mt-1">Free tier — no credit card required</p>
+        </div>
+
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-5">
+          <div>
+            <label className="text-xs font-semibold text-rain-silver block mb-2 tracking-wide uppercase">Email</label>
             <input
-              type={i > 0 ? 'password' : 'email'} required
-              value={i === 0 ? email : i === 1 ? password : confirm}
-              onChange={(e) => [setEmail, setPassword, setConfirm][i]!(e.target.value)}
-              className="w-full bg-rain-dark border border-rain-border rounded px-3 py-2 text-rain-white text-sm font-mono focus:border-rain-blue outline-none"
+              type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
+              placeholder="you@studio.com"
+              className="input-field"
             />
           </div>
-        ))}
-        {error && <p className="text-rain-red text-xs font-mono">{error}</p>}
-        <Button type="submit" loading={loading} className="w-full">CREATE ACCOUNT</Button>
-        <p className="text-rain-dim text-xs font-mono text-center">
-          Have an account?{' '}
-          <Link to="/login" className="text-rain-blue hover:underline">Sign in</Link>
+          <div>
+            <label className="text-xs font-semibold text-rain-silver block mb-2 tracking-wide uppercase">Password</label>
+            <input
+              type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
+              placeholder="Min. 8 characters"
+              className="input-field"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-rain-silver block mb-2 tracking-wide uppercase">Confirm Password</label>
+            <input
+              type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required
+              placeholder="Confirm your password"
+              className="input-field"
+            />
+          </div>
+
+          {error && (
+            <div className="bg-rain-red/10 border border-rain-red/20 rounded-lg px-4 py-3">
+              <p className="text-rain-red text-xs">{error}</p>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn-primary w-full flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              'Create Account'
+            )}
+          </button>
+        </form>
+
+        <p className="text-rain-dim text-sm text-center">
+          Already have an account?{' '}
+          <Link to="/login" className="text-rain-purple hover:text-rain-magenta transition-colors font-semibold">
+            Sign in
+          </Link>
         </p>
-      </form>
+      </div>
     </AuthLayout>
   )
 }

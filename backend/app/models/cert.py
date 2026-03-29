@@ -20,6 +20,8 @@ class RainCert(Base):
     wasm_hash: Mapped[str] = mapped_column(String, nullable=False)
     model_version: Mapped[str] = mapped_column(String, nullable=False)
     processing_params_hash: Mapped[str] = mapped_column(String, nullable=False)
+    ai_generated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    ai_source: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     content_scan_passed: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     signature: Mapped[str] = mapped_column(Text, nullable=False)
     issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
