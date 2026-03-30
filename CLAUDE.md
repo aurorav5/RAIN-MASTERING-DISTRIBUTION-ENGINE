@@ -501,3 +501,38 @@ rain/
 └── tests/
     └── e2e/
 ```
+
+---
+
+## Upgrade Workflow — R∞N Aurora v2 → Production (2026-03-30)
+
+**Active branch:** `rain/full-upgrade`
+**Workflow doc:** `RAIN-WORKFLOW-CLAUDE-CODE.md` in Downloads (full plan)
+
+### Design Tools Configured
+- **Figma MCP** — added to `~/.claude/settings.json`. Run `/mcp` in Claude Code, select figma → Authenticate via OAuth. Requires Dev or Full seat on Professional plan.
+- **Canva MCP** — already active (MCP ID: `d9b01a75-c1c6-414d-9540-d3bec397741e`). Use for marketing assets — NOT UI components.
+- **v0.dev** — browser-based rapid shadcn/Tailwind component scaffolding.
+
+### Packages Added (2026-03-30)
+- `framer-motion` — UI micro-interactions, panel transitions
+- `wavefile` — proper WAV ArrayBuffer encoding (fixes Aurora v2 export bug)
+- `onnxruntime-web@latest` — ONNX Runtime with WebGPU EP
+- `@radix-ui/*` — primitives for shadcn/ui
+- `tw-animate-css` — replaces deprecated `tailwindcss-animate`
+
+### Phase Execution Order
+1. **Phase 1 (Weeks 1-2):** Fix render truncation, WAV export, DSP f64 precision
+2. **Phase 2 (Weeks 2-4):** React 19.2.1, Valkey 9.0, PostgreSQL 18.3, Tailwind 4.2.2, Vite 7, ONNX 1.24.4
+3. **Phase 3 (Weeks 3-6):** 7 UI screens — shadcn/ui + Framer Motion + Figma review loop
+4. **Phase 4 (Weeks 5-8):** ML — ITO-Master (server), FXEncoder, genre classifier, Demucs v4
+5. **Phase 5 (Weeks 7-10):** C2PA v2.2, DDEX ERN 4.3.2, LabelGrid, Quansic ISRC
+6. **Phase 6 (Weeks 9-12):** Stripe, waitlist, beta invites, PostHog feature flags, launch
+
+### Research Findings (2026-03-30)
+- ITO-Master: no ONNX export exists. Browser inference not feasible. RainNet WASM is correct.
+- ONNX RT WebGPU: use `/webgpu` import subpath; always dispose GPU tensors; WASM as default.
+- Tailwind 4: OKLCH for meter colors; `tailwindcss-animate` deprecated → `tw-animate-css`.
+- Framer Motion: `useMotionValue` for realtime meters (NOT useState) — zero React renders/frame.
+- DDEX ERN 3.x/4.0 removed March 2026 — ERN 4.3.2 only.
+- EU AI Act Article 50: August 2, 2026 — C2PA + DDEX AI disclosure required on all output.
