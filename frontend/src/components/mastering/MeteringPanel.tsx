@@ -14,7 +14,7 @@ export function MeteringPanel() {
   const score = rainScore?.overall ?? 0
 
   return (
-    <div className="panel-card w-72 shrink-0">
+    <div className="panel-card w-64 shrink-0">
       <div className="panel-card-header text-rain-text">Metering</div>
       <div className="panel-card-body flex flex-col items-center gap-4">
         {/* Meter bars */}

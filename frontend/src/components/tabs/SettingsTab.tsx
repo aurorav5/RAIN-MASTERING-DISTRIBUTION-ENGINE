@@ -12,7 +12,7 @@ export default function SettingsTab() {
   const [bufferSize, setBufferSize] = useState('512')
 
   return (
-    <div className="p-4 space-y-4 max-w-2xl">
+    <div className="p-2 space-y-3 w-full">
       {/* Account info */}
       <div className="panel-card">
         <div className="panel-card-header">

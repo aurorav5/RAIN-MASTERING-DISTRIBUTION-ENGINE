@@ -20,7 +20,7 @@ export default function AnalyticsTab() {
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d')
 
   return (
-    <div className="p-4 space-y-4 max-w-3xl">
+    <div className="p-2 space-y-3 w-full">
       {/* Time range selector */}
       <div className="flex items-center gap-2">
         {(['7d', '30d', '90d', 'all'] as const).map(range => (

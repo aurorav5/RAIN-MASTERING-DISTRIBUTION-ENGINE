@@ -42,6 +42,35 @@ class RainNetDataset(Dataset):
         params = sample.get("target_params", {})
         param_vector = torch.zeros(32)
 
+        # Populate parameter vector from manifest target_params dict
+        # Order matches RainNetV2.decode_params output: multiband(12) + eq(8) + sat(2) + ms(4) + sail(6)
+        if params:
+            param_vector[0] = params.get("mb_threshold_low", -18.0)
+            param_vector[1] = params.get("mb_threshold_mid", -18.0)
+            param_vector[2] = params.get("mb_threshold_high", -18.0)
+            param_vector[3] = params.get("mb_ratio_low", 2.5)
+            param_vector[4] = params.get("mb_ratio_mid", 2.0)
+            param_vector[5] = params.get("mb_ratio_high", 2.0)
+            param_vector[6] = params.get("mb_attack_low", 10.0)
+            param_vector[7] = params.get("mb_attack_mid", 5.0)
+            param_vector[8] = params.get("mb_attack_high", 2.0)
+            param_vector[9] = params.get("mb_release_low", 150.0)
+            param_vector[10] = params.get("mb_release_mid", 80.0)
+            param_vector[11] = params.get("mb_release_high", 40.0)
+            eq_gains = params.get("eq_gains", [0.0] * 8)
+            for j in range(8):
+                param_vector[12 + j] = eq_gains[j] if j < len(eq_gains) else 0.0
+            param_vector[20] = 1.0 if params.get("analog_saturation", False) else 0.0
+            param_vector[21] = params.get("saturation_drive", 0.0)
+            param_vector[22] = 1.0 if params.get("ms_enabled", False) else 0.0
+            param_vector[23] = params.get("mid_gain", 0.0)
+            param_vector[24] = params.get("side_gain", 0.0)
+            param_vector[25] = params.get("stereo_width", 1.0)
+            param_vector[26] = 1.0 if params.get("sail_enabled", False) else 0.0
+            stem_gains = params.get("sail_stem_gains", [0.0] * 5)
+            for j in range(5):
+                param_vector[27 + j] = stem_gains[j] if j < len(stem_gains) else 0.0
+
         return {
             "mel": mel,
             "artist_vec": torch.zeros(64),

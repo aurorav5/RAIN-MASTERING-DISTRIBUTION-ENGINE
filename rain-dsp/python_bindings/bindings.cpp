@@ -31,7 +31,7 @@ static rain::ProcessingParams parse_params(const std::string& json_str) {
     for (int i = 0; i < 8; ++i) p.eq_gains[i] = 0.0;
     p.analog_saturation = false;
     p.saturation_drive = 0.0;
-    p.saturation_mode = rain::SaturationMode::TAPE;
+    p.saturation_mode = "tape";
     p.ms_enabled = false;
     p.mid_gain = 0.0;
     p.side_gain = 0.0;
@@ -106,7 +106,7 @@ PYBIND11_MODULE(rain_dsp_native, m) {
         .def_readonly("integrated", &rain::LufsResult::integrated)
         .def_readonly("short_term", &rain::LufsResult::short_term)
         .def_readonly("momentary", &rain::LufsResult::momentary)
-        .def_readonly("lra", &rain::LufsResult::lra)
+        .def_readonly("loudness_range", &rain::LufsResult::loudness_range)
         .def_readonly("true_peak_dbtp", &rain::LufsResult::true_peak_dbtp);
 
     m.def("process",
@@ -135,7 +135,7 @@ PYBIND11_MODULE(rain_dsp_native, m) {
             json << "{\"integrated_lufs\":" << lufs.integrated
                  << ",\"short_term_lufs\":" << lufs.short_term
                  << ",\"momentary_lufs\":" << lufs.momentary
-                 << ",\"loudness_range\":" << lufs.lra
+                 << ",\"loudness_range\":" << lufs.loudness_range
                  << ",\"true_peak_dbtp\":" << tp << "}";
 
             py::array_t<double> out_l_arr(n), out_r_arr(n);

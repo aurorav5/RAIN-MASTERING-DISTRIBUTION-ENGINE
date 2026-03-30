@@ -1,17 +1,17 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { Cpu } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth'
 import { useSessionStore } from '@/stores/session'
 import { renderLocal } from '@/hooks/useLocalRender'
 import { api, APIError } from '@/utils/api'
 import { UploadZone } from '../controls/UploadZone'
+import { Waveform } from '../visualizers/Waveform'
+import { Spectrum } from '../visualizers/Spectrum'
 import { SignalChain } from '../mastering/SignalChain'
 import { CreativeMacros } from '../mastering/CreativeMacros'
 import { MeteringPanel } from '../mastering/MeteringPanel'
 import { AnalogModeling } from '../mastering/AnalogModeling'
 import { MSProcessing } from '../mastering/MSProcessing'
 import { MasteringEngine } from '../mastering/MasteringEngine'
-import { SpectrumView } from '../visualizers/SpectrumView'
 
 const PLATFORMS = ['spotify', 'apple_music', 'youtube', 'tidal', 'amazon', 'soundcloud', 'cd', 'vinyl'] as const
 const GENRES = ['electronic', 'hiphop', 'rock', 'pop', 'classical', 'jazz', 'default'] as const
@@ -20,7 +20,7 @@ type Genre = typeof GENRES[number]
 
 export default function MasteringTab() {
   const { tier } = useAuthStore()
-  const { setStatus, setOutputBuffer, setResult, status, outputBuffer, outputLufs, rainCertId } = useSessionStore()
+  const { setStatus, setOutputBuffer, status, outputBuffer, outputLufs } = useSessionStore()
 
   const [file, setFile] = useState<File | null>(null)
   const [inputBuffer, setInputBuffer] = useState<ArrayBuffer | null>(null)
@@ -31,6 +31,7 @@ export default function MasteringTab() {
   const wsRef = useRef<WebSocket | null>(null)
 
   // Macro state
+  const [vizMode, setVizMode] = useState<'waveform' | 'spectrum' | 'phase'>('waveform')
   const [macros, setMacros] = useState({ brighten: 5.0, glue: 4.2, width: 3.8, punch: 6.1, warmth: 5.5 })
   const [satMode, setSatMode] = useState('tape')
   const [satDrive, setSatDrive] = useState(0.3)
@@ -40,9 +41,6 @@ export default function MasteringTab() {
   const [stereoWidth, setStereoWidth] = useState(1.0)
 
   const isFree = tier === 'free'
-
-  // Dev helper — exposes handleFile to window for E2E testing
-  const handleFileRef = useRef<((f: File) => Promise<void>) | null>(null)
 
   const handleFile = useCallback(async (f: File) => {
     setFile(f)
@@ -54,14 +52,6 @@ export default function MasteringTab() {
     // Also push to session store for transport bar
     useSessionStore.getState().setInputBuffer(buf)
   }, [setStatus, setOutputBuffer])
-
-  // Register dev helper on window so tests can inject files
-  useEffect(() => {
-    handleFileRef.current = handleFile
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(window as any).__rainHandleFile = (f: File) => handleFileRef.current?.(f)
-    return () => { /* eslint-disable-next-line @typescript-eslint/no-explicit-any */ ; delete (window as any).__rainHandleFile }
-  }, [handleFile])
 
   // WebSocket for paid-tier real-time updates
   useEffect(() => {
@@ -82,8 +72,10 @@ export default function MasteringTab() {
       } = JSON.parse(evt.data as string)
       setStatus(msg.status as Parameters<typeof setStatus>[0])
       if (msg.status === 'complete' && msg.output_lufs != null) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(useSessionStore.getState() as any).setOutputLufs?.(msg.output_lufs)
+        const score = (msg.rain_score ?? { overall: 0, spotify: 0, apple_music: 0, youtube: 0, tidal: 0, codec_penalty: {} }) as {
+          overall: number; spotify: number; apple_music: number; youtube: number; tidal: number; codec_penalty: Record<string, number>
+        }
+        useSessionStore.getState().setResult(msg.output_lufs, msg.output_true_peak ?? 0, score, '')
       }
     }
     ws.onerror = () => setError('RAIN-E300: WebSocket error')
@@ -102,18 +94,6 @@ export default function MasteringTab() {
       try {
         const result = await renderLocal(inputBuffer, genre, platform)
         setOutputBuffer(result.outputBuffer)
-        // Compute a RAIN score from LUFS proximity to target
-        const targetLufs = -14.0
-        const lufsError = Math.abs(result.integratedLufs - targetLufs)
-        const baseScore = Math.max(0, Math.min(100, Math.round(100 - lufsError * 8)))
-        setResult(result.integratedLufs, result.truePeakDbtp, {
-          overall: baseScore,
-          spotify: Math.min(100, baseScore + 2),
-          apple_music: Math.min(100, baseScore + 1),
-          youtube: Math.max(0, baseScore - 3),
-          tidal: Math.min(100, baseScore + 3),
-          codec_penalty: { mp3_320: 0, aac_256: 0, ogg_q5: 0 },
-        }, result.wasmHash.slice(0, 16))
         setStatus('complete')
       } catch (e) {
         setError(e instanceof Error ? e.message : 'RAIN-E300: Render failed')
@@ -156,7 +136,7 @@ export default function MasteringTab() {
   }, [])
 
   return (
-    <div className="p-4 space-y-3 max-w-[1600px] mx-auto">
+    <div className="p-2 space-y-2 w-full">
       {/* Row 0: Upload zone (collapsed when file loaded) */}
       {!inputBuffer && (
         <UploadZone onFileSelected={handleFile} disabled={status !== 'idle'} />
@@ -196,14 +176,38 @@ export default function MasteringTab() {
         disabled={!inputBuffer}
       />
 
-      {/* Row 1.5: Spectrum Visualizer — beats Aurora's waveform-only view */}
-      <SpectrumView />
+      {/* Row 1.5: Visualizer */}
+      <div className="panel-card">
+        <div className="panel-card-header justify-between">
+          <span>Visualizer</span>
+          <div className="flex gap-1">
+            {(['waveform', 'spectrum', 'phase'] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setVizMode(mode)}
+                className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider transition-all ${
+                  vizMode === mode
+                    ? 'bg-rain-teal/10 text-rain-teal border border-rain-teal/20'
+                    : 'text-rain-dim hover:text-rain-text border border-transparent'
+                }`}
+              >
+                {mode === 'waveform' ? 'WAVE FORM' : mode === 'spectrum' ? 'SPECTRUM' : 'PHASE'}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="panel-card-body p-0">
+          {vizMode === 'waveform' && <Waveform height={80} />}
+          {vizMode === 'spectrum' && <Spectrum height={80} />}
+          {vizMode === 'phase' && <Waveform height={80} />}
+        </div>
+      </div>
 
-      {/* Row 2: Signal Chain — 12 stages */}
+      {/* Row 2: Signal Chain */}
       <SignalChain />
 
       {/* Row 3: Creative Macros + Metering */}
-      <div className="flex gap-3">
+      <div className="flex gap-2">
         <CreativeMacros
           brighten={macros.brighten}
           glue={macros.glue}
@@ -216,7 +220,7 @@ export default function MasteringTab() {
       </div>
 
       {/* Row 4: Analog Modeling + M/S Processing */}
-      <div className="flex gap-3">
+      <div className="flex gap-2">
         <AnalogModeling
           mode={satMode}
           drive={satDrive}
@@ -240,34 +244,6 @@ export default function MasteringTab() {
         <p className="text-[9px] font-mono text-rain-muted text-center">
           Preview measurement — final render may differ slightly. Upgrade for full resolution export.
         </p>
-      )}
-
-      {/* Reproducibility Triad — visible only when complete */}
-      {status === 'complete' && (
-        <div className="panel-card">
-          <div className="panel-card-header">
-            <Cpu size={12} className="text-rain-dim mr-1.5" />
-            <span className="text-[9px] font-mono tracking-widest text-rain-dim uppercase">
-              Reproducibility Triad
-            </span>
-          </div>
-          <div className="panel-card-body py-2 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono text-rain-dim">DSP Version</span>
-              <span className="text-[9px] font-mono text-rain-text">RainDSP v6.0.0</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono text-rain-dim">WASM Hash</span>
-              <span className="text-[9px] font-mono text-rain-text">
-                {rainCertId ? `${rainCertId.slice(0, 16)}...` : '—'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono text-rain-dim">Model</span>
-              <span className="text-[9px] font-mono text-rain-text">RainNet v2 (heuristic)</span>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   )
