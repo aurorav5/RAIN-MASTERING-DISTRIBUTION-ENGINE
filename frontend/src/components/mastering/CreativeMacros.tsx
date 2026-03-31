@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react'
 import { MacroKnob } from './MacroKnob'
+import type { MacroValues } from '@/stores/session'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -8,15 +9,7 @@ import { MacroKnob } from './MacroKnob'
 /** Source of the current macro values. */
 export type MacroSource = 'MODEL' | 'HEURISTIC' | 'MANUAL'
 
-export interface MacroValues {
-  brighten: number
-  glue: number
-  width: number
-  punch: number
-  warmth: number
-  space: number
-  repair: number
-}
+export type { MacroValues }
 
 export interface CreativeMacrosProps {
   /** Current macro values (0.0 - 10.0 each). */

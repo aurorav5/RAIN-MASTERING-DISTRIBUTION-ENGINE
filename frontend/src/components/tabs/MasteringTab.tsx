@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
 import { useSessionStore } from '@/stores/session'
+import type { MacroValues } from '@/stores/session'
 import { api, APIError } from '@/utils/api'
 import type { AnalysisData, ProcessResult } from '@/utils/api'
 import { UploadZone } from '../controls/UploadZone'
@@ -7,7 +8,6 @@ import { Waveform } from '../visualizers/Waveform'
 import { Spectrum } from '../visualizers/Spectrum'
 import { SignalChain } from '../mastering/SignalChain'
 import { CreativeMacros } from '../mastering/CreativeMacros'
-import type { MacroValues } from '../mastering/CreativeMacros'
 import { MeteringPanel } from '../mastering/MeteringPanel'
 import { MasteringEngine } from '../mastering/MasteringEngine'
 import { AnalogModeling } from '../mastering/AnalogModeling'
@@ -72,30 +72,20 @@ function formatSampleRate(sr: number): string {
 // ---------------------------------------------------------------------------
 
 export default function MasteringTab() {
-  const { setStatus, status, setAnalysis, setResult } = useSessionStore()
+  const store = useSessionStore()
+  const {
+    status, sessionId, inputBuffer, fileName, macros,
+    isProcessing,
+    setStatus, setAnalysis, setResult, setInputBuffer,
+    setFileInfo, setMacros, setIsProcessing, setSession,
+  } = store
 
-  // -- File & session state --
-  const [file, setFile] = useState<File | null>(null)
-  const [inputBuffer, setInputBuffer] = useState<ArrayBuffer | null>(null)
+  // -- Local-only UI state (OK to lose on tab switch) --
   const [error, setError] = useState<string | null>(null)
-  const [masterSessionId, setMasterSessionId] = useState<string | null>(null)
   const [analysis, setAnalysisData] = useState<AnalysisData | null>(null)
   const [processResult, setProcessResult] = useState<ProcessResult | null>(null)
-  const [isProcessing, setIsProcessing] = useState(false)
-
-  // -- Upload bar collapse --
-  const [uploadCollapsed, setUploadCollapsed] = useState(false)
-
-  // -- Macro values (CreativeMacros expects a MacroValues object) --
-  const [macroValues, setMacroValues] = useState<MacroValues>({
-    brighten: 5.0,
-    glue: 6.0,
-    width: 5.0,
-    punch: 5.0,
-    warmth: 2.5,
-    space: 3.0,
-    repair: 0.0,
-  })
+  const [uploadCollapsed, setUploadCollapsed] = useState(!!fileName)
+  const macroValues = macros
 
   // -- Analog modeling state --
   const [analogMode, setAnalogMode] = useState('tape')
@@ -135,17 +125,15 @@ export default function MasteringTab() {
     [macroValues],
   )
 
-  // -- Macro change handler --
+  // -- Macro change handler (persisted in store) --
   const handleMacroChange = useCallback((key: keyof MacroValues, value: number) => {
-    setMacroValues((prev) => ({ ...prev, [key]: value }))
-  }, [])
+    setMacros({ [key]: value })
+  }, [setMacros])
 
   // -- File upload handler --
   const handleFile = useCallback(
     async (f: File) => {
-      setFile(f)
       setError(null)
-      setMasterSessionId(null)
       setAnalysisData(null)
       setProcessResult(null)
       setStatus('idle')
@@ -156,14 +144,13 @@ export default function MasteringTab() {
 
       const buf = await f.arrayBuffer()
       setInputBuffer(buf)
-      useSessionStore.getState().setInputBuffer(buf)
+      setFileInfo(name, 0, 48000, 24, 2)
 
       // Try backend upload, fall back to local-only mode if unreachable
       try {
         setStatus('uploading')
         const uploadRes = await api.master.upload(f)
-        setMasterSessionId(uploadRes.session_id)
-        useSessionStore.getState().setSession(uploadRes.session_id)
+        setSession(uploadRes.session_id)
 
         setStatus('analyzing')
         const analysisRes = await api.master.analysis(uploadRes.session_id)
@@ -172,22 +159,22 @@ export default function MasteringTab() {
         setStatus('idle')
       } catch {
         // Backend unreachable — local-only mode (free tier / offline)
-        setMasterSessionId('local')
+        setSession('local')
         setStatus('idle')
       }
     },
-    [setStatus, setAnalysis],
+    [setStatus, setAnalysis, setInputBuffer, setFileInfo, setSession],
   )
 
   // -- Master handler --
   const handleMaster = useCallback(async () => {
-    if (!masterSessionId) return
+    if (!sessionId) return
     setError(null)
     setIsProcessing(true)
     setStatus('processing')
 
     // Local-only mode: simulate mastering with a brief delay
-    if (masterSessionId === 'local') {
+    if (sessionId === 'local') {
       await new Promise((r) => setTimeout(r, 1500))
       const score = {
         overall: 82,
@@ -198,8 +185,6 @@ export default function MasteringTab() {
         codec_penalty: {},
       }
       setResult(-14.0, -1.0, score, '')
-      setStatus('complete')
-      setIsProcessing(false)
       return
     }
 
@@ -213,7 +198,7 @@ export default function MasteringTab() {
         track_number: trackNumber,
         year,
       }
-      const result = await api.master.process(masterSessionId, params)
+      const result = await api.master.process(sessionId, params)
       setProcessResult(result)
 
       const score = {
@@ -225,11 +210,6 @@ export default function MasteringTab() {
         codec_penalty: {},
       }
       setResult(result.output_lufs, result.output_true_peak, score, '')
-
-      const updatedAnalysis = await api.master.analysis(masterSessionId)
-      setAnalysisData(updatedAnalysis)
-
-      setStatus('complete')
     } catch (e) {
       const msg =
         e instanceof APIError
@@ -239,11 +219,10 @@ export default function MasteringTab() {
             : 'Mastering failed'
       setError(msg)
       setStatus('failed')
-    } finally {
       setIsProcessing(false)
     }
   }, [
-    masterSessionId,
+    sessionId,
     knobToParam,
     title,
     artist,
@@ -253,27 +232,15 @@ export default function MasteringTab() {
     year,
     setStatus,
     setResult,
+    setIsProcessing,
   ])
 
   // -- Reset handler --
   const handleReset = useCallback(() => {
-    setFile(null)
-    setInputBuffer(null)
     setError(null)
-    setMasterSessionId(null)
     setAnalysisData(null)
     setProcessResult(null)
-    setIsProcessing(false)
     setUploadCollapsed(false)
-    setMacroValues({
-      brighten: 5.0,
-      glue: 6.0,
-      width: 5.0,
-      punch: 5.0,
-      warmth: 2.5,
-      space: 3.0,
-      repair: 0.0,
-    })
     setAnalogMode('tape')
     setAnalogDrive(0.0)
     setMsEnabled(false)
@@ -326,7 +293,6 @@ export default function MasteringTab() {
         </div>
       ) : (
         <SessionBar
-          file={file}
           analysis={analysis}
           status={status}
           collapsed={uploadCollapsed}
@@ -426,7 +392,7 @@ export default function MasteringTab() {
                     <MasteringEngine
                       onMasterNow={() => void handleMaster()}
                       onReset={handleReset}
-                      disabled={!masterSessionId || isProcessing}
+                      disabled={!sessionId || isProcessing}
                     />
                   </div>
 
@@ -539,11 +505,11 @@ export default function MasteringTab() {
                     )}
 
                     {/* Results + A/B + Export (shown after mastering completes) */}
-                    {processResult && masterSessionId && (
+                    {processResult && sessionId && (
                       <div className="mt-2 space-y-2">
                         <ResultsBar result={processResult} />
                         <ABComparison mode={abMode} onToggle={handleABToggle} />
-                        <ExportBar sessionId={masterSessionId} />
+                        <ExportBar sessionId={sessionId} />
                       </div>
                     )}
                   </div>
@@ -644,7 +610,6 @@ export default function MasteringTab() {
 // -- Session Bar ------------------------------------------------------------
 
 interface SessionBarProps {
-  file: File | null
   analysis: AnalysisData | null
   status: string
   collapsed: boolean
@@ -653,13 +618,13 @@ interface SessionBarProps {
 }
 
 function SessionBar({
-  file,
   analysis,
   status,
   collapsed,
   onToggleCollapse,
   onNewFile,
 }: SessionBarProps) {
+  const fileName = useSessionStore((s) => s.fileName)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleNewClick = useCallback(() => {
@@ -709,7 +674,7 @@ function SessionBar({
       <div className="flex items-center gap-1.5 min-w-0">
         <FileAudio size={13} className="text-rain-teal shrink-0" />
         <span className="text-[10px] font-mono text-rain-text truncate max-w-[200px]">
-          {file?.name ?? 'No file'}
+          {fileName ?? 'No file'}
         </span>
       </div>
 
