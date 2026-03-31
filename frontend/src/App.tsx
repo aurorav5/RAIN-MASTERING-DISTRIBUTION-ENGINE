@@ -77,6 +77,7 @@ export default function App() {
           <Route path="analytics" element={<Suspense fallback={<TabFallback />}><AnalyticsTab /></Suspense>} />
           <Route path="roadmap" element={<Suspense fallback={<TabFallback />}><RoadmapTab /></Suspense>} />
           <Route path="settings" element={<Suspense fallback={<TabFallback />}><SettingsTab /></Suspense>} />
+          <Route path="aie" element={<Suspense fallback={<TabFallback />}><AIETab /></Suspense>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

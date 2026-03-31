@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Disc3, Layers, Move3D, ShieldCheck, Download, Send,
   Settings, BarChart3, Rocket, Users, Disc, Database,
-  TestTube2, TrendingUp, ChevronLeft, ChevronRight,
+  TestTube2, TrendingUp, ChevronLeft, ChevronRight, Fingerprint,
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth'
 
@@ -39,6 +39,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'Tools',
     items: [
       { to: '/app/qc', label: 'QC', icon: ShieldCheck },
+      { to: '/app/aie', label: 'Identity', icon: Fingerprint },
       { to: '/app/collab', label: 'Collab', icon: Users },
       { to: '/app/export', label: 'Export', icon: Download },
       { to: '/app/distribute', label: 'Distribute', icon: Send },
