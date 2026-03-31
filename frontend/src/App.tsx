@@ -25,6 +25,10 @@ const SettingsTab = lazy(() => import('@/components/tabs/SettingsTab'))
 const AIETab = lazy(() =>
   import('@/components/tabs/AIETab').then((m) => ({ default: m.AIETab }))
 )
+const DocsTab = lazy(() => import('@/components/tabs/DocsTab'))
+const ReferenceTab = lazy(() => import('@/components/tabs/ReferenceTab'))
+const RepairTab = lazy(() => import('@/components/tabs/RepairTab'))
+const TestLabTab = lazy(() => import('@/components/tabs/TestLabTab'))
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -78,6 +82,10 @@ export default function App() {
           <Route path="roadmap" element={<Suspense fallback={<TabFallback />}><RoadmapTab /></Suspense>} />
           <Route path="settings" element={<Suspense fallback={<TabFallback />}><SettingsTab /></Suspense>} />
           <Route path="aie" element={<Suspense fallback={<TabFallback />}><AIETab /></Suspense>} />
+          <Route path="docs" element={<Suspense fallback={<TabFallback />}><DocsTab /></Suspense>} />
+          <Route path="reference" element={<Suspense fallback={<TabFallback />}><ReferenceTab /></Suspense>} />
+          <Route path="repair" element={<Suspense fallback={<TabFallback />}><RepairTab /></Suspense>} />
+          <Route path="testlab" element={<Suspense fallback={<TabFallback />}><TestLabTab /></Suspense>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

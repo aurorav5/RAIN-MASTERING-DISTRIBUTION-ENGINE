@@ -5,6 +5,7 @@ import {
   Disc3, Layers, Move3D, ShieldCheck, Download, Send,
   Settings, BarChart3, Rocket, Users, Disc, Database,
   TestTube2, TrendingUp, ChevronLeft, ChevronRight, Fingerprint,
+  BookOpen, ScanSearch, Wrench, FlaskConical,
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth'
 
@@ -33,6 +34,8 @@ const NAV_SECTIONS: NavSection[] = [
       { to: '/app', label: 'Master', icon: Disc3, end: true },
       { to: '/app/stems', label: 'Stems', icon: Layers },
       { to: '/app/spatial', label: 'Spatial', icon: Move3D },
+      { to: '/app/reference', label: 'Reference', icon: ScanSearch },
+      { to: '/app/repair', label: 'Repair', icon: Wrench },
     ],
   },
   {
@@ -62,6 +65,8 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'System',
     items: [
+      { to: '/app/docs', label: 'Docs', icon: BookOpen },
+      { to: '/app/testlab', label: 'Test Lab', icon: FlaskConical },
       { to: '/app/test', label: 'Test', icon: TestTube2 },
       { to: '/app/roadmap', label: 'Roadmap', icon: Rocket },
       { to: '/app/settings', label: 'Settings', icon: Settings },
