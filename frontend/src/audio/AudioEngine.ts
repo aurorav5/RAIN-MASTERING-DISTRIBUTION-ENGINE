@@ -337,6 +337,11 @@ class AudioEngine {
     return this.currentBuffer?.duration ?? 0;
   }
 
+  /** The currently loaded AudioBuffer, or null if none loaded. */
+  get buffer(): AudioBuffer | null {
+    return this.currentBuffer;
+  }
+
   /**
    * Read current frequency data from the left-channel analyser.
    * Returns Float32Array in dB (getFloatFrequencyData).

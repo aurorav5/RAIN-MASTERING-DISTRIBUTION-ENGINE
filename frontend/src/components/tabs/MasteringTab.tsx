@@ -31,6 +31,8 @@ export default function MasteringTab() {
   const [warmth, setWarmth] = useState(2.5)
   const [punch, setPunch] = useState(5.0)
   const [air, setAir] = useState(3.75)
+  const [space, setSpace] = useState(0.0)
+  const [repair, setRepair] = useState(0.0)
 
   // Metadata
   const [title, setTitle] = useState('')
@@ -237,7 +239,7 @@ export default function MasteringTab() {
             </div>
           </div>
           <div className="panel-card-body p-0">
-            {vizMode === 'waveform' ? <Waveform height={80} /> : <Spectrum height={80} />}
+            {vizMode === 'waveform' ? <Waveform height={200} /> : <Spectrum height={80} />}
           </div>
         </div>
       )}
@@ -291,18 +293,26 @@ export default function MasteringTab() {
       {inputBuffer && (
         <div className="flex gap-2">
           <CreativeMacros
-            brighten={brightness}
-            glue={tightness}
-            width={width}
-            punch={punch}
-            warmth={warmth}
+            values={{
+              brighten: brightness,
+              glue: tightness,
+              width,
+              punch,
+              warmth,
+              space,
+              repair,
+            }}
             onChange={(key, value) => {
               if (key === 'brighten') setBrightness(value)
               else if (key === 'glue') setTightness(value)
               else if (key === 'width') setWidth(value)
               else if (key === 'punch') setPunch(value)
               else if (key === 'warmth') setWarmth(value)
+              else if (key === 'space') setSpace(value)
+              else if (key === 'repair') setRepair(value)
             }}
+            genre={genre || undefined}
+            source="MANUAL"
           />
           <MeteringPanel />
         </div>
