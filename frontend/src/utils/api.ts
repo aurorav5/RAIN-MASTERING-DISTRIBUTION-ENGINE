@@ -109,5 +109,41 @@ export const api = {
       ),
     downloadUrl: (sessionId: string, format: 'wav' | 'mp3') =>
       `${BASE_URL}/master/${sessionId}/download/${format}`,
+    features: (sessionId: string) =>
+      request<Record<string, number>>(`/master/${sessionId}/features`),
+    qcReport: (sessionId: string) =>
+      request<QCReportData>(`/master/${sessionId}/qc`),
   },
+  qc: {
+    platforms: () => request<PlatformTargetData[]>('/qc/platforms'),
+  },
+}
+
+export interface PlatformTargetData {
+  slug: string
+  name: string
+  target_lufs: number
+  true_peak_ceiling: number
+  lra_min: number | null
+  lra_max: number | null
+  notes: string
+}
+
+export interface QCCheckData {
+  id: number
+  name: string
+  severity: string
+  passed: boolean
+  value: number | null
+  threshold: number | null
+  auto_remediated: boolean
+  detail: string
+}
+
+export interface QCReportData {
+  platform: string
+  passed: boolean
+  critical_failures: number
+  remediated_count: number
+  checks: QCCheckData[]
 }

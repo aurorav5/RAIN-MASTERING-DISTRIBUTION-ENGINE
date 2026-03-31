@@ -81,6 +81,7 @@ export default function MasteringTab() {
       setStatus('uploading')
       const uploadRes = await api.master.upload(f)
       setMasterSessionId(uploadRes.session_id)
+      useSessionStore.getState().setSession(uploadRes.session_id)
 
       // Get analysis
       setStatus('analyzing')
