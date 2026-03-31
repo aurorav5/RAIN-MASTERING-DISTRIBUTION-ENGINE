@@ -1,13 +1,25 @@
-version: '3.9'
-
-# RAIN Prototype — lightweight dev stack (no DB, no Redis, no S3)
-# Usage: docker compose -f docker-compose.prototype.yml up --build
-
 services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: rain_app
+      POSTGRES_PASSWORD: rain_dev
+      POSTGRES_DB: rain
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rain_app -d rain"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build:
       context: .
       dockerfile: docker/Dockerfile.backend
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - ./backend:/app
     environment:
@@ -16,7 +28,7 @@ services:
       RAIN_LOG_LEVEL: debug
       RAIN_NORMALIZATION_VALIDATED: "false"
       FRONTEND_URL: "http://localhost:5173"
-      DATABASE_URL: "sqlite:///dev.db"
+      DATABASE_URL: "postgresql+asyncpg://rain_app:rain_dev@postgres:5432/rain"
       REDIS_URL: "redis://localhost:6379/0"
       S3_BUCKET: "rain-audio"
       S3_ENDPOINT_URL: "http://localhost:9000"
