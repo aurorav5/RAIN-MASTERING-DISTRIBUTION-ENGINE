@@ -12,6 +12,7 @@
       "@/*": ["src/*"]
     },
     "skipLibCheck": true,
+    "noEmit": true,
     "isolatedModules": true,
     "types": ["vite/client"]
   },

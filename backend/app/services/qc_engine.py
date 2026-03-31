@@ -41,14 +41,16 @@ class QCReport:
     def to_dict(self) -> dict[str, Any]:
         return {
             "platform": self.platform,
-            "passed": self.passed,
-            "critical_failures": self.critical_failures,
-            "remediated_count": self.remediated_count,
+            "passed": bool(self.passed),
+            "critical_failures": int(self.critical_failures),
+            "remediated_count": int(self.remediated_count),
             "checks": [
                 {
-                    "id": c.id, "name": c.name, "severity": c.severity,
-                    "passed": c.passed, "value": c.value, "threshold": c.threshold,
-                    "auto_remediated": c.auto_remediated, "detail": c.detail,
+                    "id": int(c.id), "name": c.name, "severity": c.severity,
+                    "passed": bool(c.passed),
+                    "value": float(c.value) if c.value is not None else None,
+                    "threshold": float(c.threshold) if c.threshold is not None else None,
+                    "auto_remediated": bool(c.auto_remediated), "detail": c.detail,
                 }
                 for c in self.checks
             ],
