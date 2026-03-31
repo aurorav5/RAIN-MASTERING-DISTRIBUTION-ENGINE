@@ -35,6 +35,7 @@ from app.services.metadata_engine import write_metadata
 from app.services.feature_extraction import extract_features, FeatureVector
 from app.services.qc_engine import run_qc, QCReport
 from app.services.platform_targets import get_platform_target, list_platform_targets
+from app.services.provenance import create_rain_cert, create_c2pa_manifest, RainCert
 
 logger = structlog.get_logger()
 
@@ -275,6 +276,26 @@ async def process_audio(session_id: str, req: ProcessRequest) -> ProcessResponse
         )
         session["qc_report"] = qc_report
 
+        # RAIN-CERT provenance chain (Stage 15)
+        rain_cert = create_rain_cert(
+            session_id=session_id,
+            source_file_path=session["input_path"],
+            output_file_path=result.output_wav_path,
+            processing_params={"target_lufs": req.target_lufs, "brightness": req.brightness},
+            output_lufs=result.output_lufs,
+            output_true_peak=result.output_true_peak,
+        )
+        session["rain_cert"] = rain_cert
+
+        # C2PA manifest (EU AI Act Article 50)
+        c2pa = create_c2pa_manifest(
+            title=metadata.get("title", ""),
+            artist=metadata.get("artist", ""),
+            format="wav",
+            rain_cert=rain_cert,
+        )
+        session["c2pa_manifest"] = c2pa
+
         session["result"] = result
         session["status"] = "complete"
         session["metadata"] = metadata
@@ -347,6 +368,30 @@ async def get_features(session_id: str) -> dict:
     if not features:
         raise HTTPException(status_code=400, detail="Features not yet extracted")
     return features.to_dict()
+
+
+@router.get("/{session_id}/cert")
+async def get_rain_cert(session_id: str) -> dict:
+    """Get RAIN-CERT provenance certificate for a mastered session."""
+    session = _sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    cert: RainCert | None = session.get("rain_cert")
+    if not cert:
+        raise HTTPException(status_code=400, detail="RAIN-CERT not yet issued (master first)")
+    return cert.to_dict()
+
+
+@router.get("/{session_id}/c2pa")
+async def get_c2pa_manifest(session_id: str) -> dict:
+    """Get C2PA v2.2 Content Provenance manifest for EU AI Act Article 50 compliance."""
+    session = _sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    c2pa = session.get("c2pa_manifest")
+    if not c2pa:
+        raise HTTPException(status_code=400, detail="C2PA manifest not yet generated (master first)")
+    return c2pa.to_dict()
 
 
 @router.get("/{session_id}/qc")
