@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     RAIN_LOG_LEVEL: str = "debug"
 
     DATABASE_URL: str = "postgresql+asyncpg://rain_app:rain@localhost:5432/rain"
-    REDIS_URL: str = "redis://redis:6379/0"
+    REDIS_URL: str = "redis://valkey:6379/0"
 
     S3_BUCKET: str = "rain-audio"
     S3_ENDPOINT_URL: str = "http://minio:9000"
