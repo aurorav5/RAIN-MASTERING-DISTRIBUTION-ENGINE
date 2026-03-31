@@ -4,7 +4,7 @@ from app.core.config import settings
 from app.core.observability import setup_observability
 from app.core.metrics import NORMALIZATION_GATE
 from app.core import metrics as _metrics_module  # noqa: F401 — registers all Prometheus metrics at import
-from app.api.routes import auth, upload, billing, sessions, download, aie, distribution, suno_import, score, whitelabel, workspaces, lora
+from app.api.routes import auth, upload, billing, sessions, download, aie, distribution, suno_import, score, whitelabel, workspaces, lora, master
 
 app = FastAPI(
     title="RAIN API",
@@ -15,7 +15,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    allow_origins=[settings.FRONTEND_URL, "http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,6 +35,7 @@ app.include_router(score.router, prefix="/api/v1")
 app.include_router(whitelabel.router, prefix="/api/v1")
 app.include_router(workspaces.router, prefix="/api/v1")
 app.include_router(lora.router, prefix="/api/v1")
+app.include_router(master.router, prefix="/api/v1")
 
 
 @app.on_event("startup")
