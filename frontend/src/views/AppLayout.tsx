@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Outlet } from 'react-router-dom'
 import { TopBar } from '@/components/layout/TopBar'
 import { Sidebar } from '@/components/layout/Sidebar'
+import { TransportBar } from '@/components/transport/TransportBar'
 import { StatusFooter } from '@/components/layout/StatusFooter'
 
 export default function AppLayout() {
@@ -23,6 +24,7 @@ export default function AppLayout() {
       <Sidebar />
       <div className="flex flex-col flex-1 min-w-0 relative z-10">
         <TopBar />
+        <TransportBar />
         <main className="flex-1 overflow-auto page-enter">
           <Outlet />
         </main>
