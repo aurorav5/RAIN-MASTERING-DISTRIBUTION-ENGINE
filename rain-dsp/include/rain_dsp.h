@@ -78,7 +78,7 @@ struct ProcessingParams {
     // Saturation
     bool analog_saturation  = false;
     double saturation_drive = 0.0;               // 0.0 - 1.0
-    std::string saturation_mode = "tape";        // "tape" | "transformer" | "tube"
+    std::string saturation_mode = "tape";        // "tape" | "transistor" | "tube"
 
     // M/S
     bool ms_enabled       = false;

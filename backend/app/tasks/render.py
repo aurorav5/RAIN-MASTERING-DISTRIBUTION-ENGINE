@@ -19,16 +19,16 @@ async def _render_session_async(
     from app.models.session import Session as MasteringSession
     from app.models.aie import AIEProfile
     from app.services.inference import InferenceService
-    from app.services.storage import get_s3_client, upload_to_s3
+    from app.services.storage import download_from_s3, upload_to_s3
     from app.services.wasm_bridge import RainDSPBridge
     from app.services.rain_score import compute_rain_score
     from app.core.config import settings
-    from sqlalchemy import select, update
+    from sqlalchemy import select, update, text
     from uuid import UUID
     import time
 
     async with AsyncSessionLocal() as db:
-        await db.execute(f"SELECT set_app_user_id('{user_id}'::uuid)")
+        await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(user_id)})
 
         result = await db.execute(
             select(MasteringSession).where(
@@ -65,9 +65,7 @@ async def _render_session_async(
             )
             logger.info("params_source", session_id=session_id, source=source, stage="render", user_id=user_id)
 
-            s3 = get_s3_client()
-            obj = s3.get_object(Bucket=settings.S3_BUCKET, Key=session.input_file_key)
-            audio_data = obj["Body"].read()
+            audio_data = await download_from_s3(session.input_file_key)
 
             t0 = time.monotonic()
             bridge = RainDSPBridge()

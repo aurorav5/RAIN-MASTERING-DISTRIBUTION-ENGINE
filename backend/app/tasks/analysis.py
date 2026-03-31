@@ -13,14 +13,13 @@ def analyze_session(self, session_id: str, user_id: str) -> None:
 async def _analyze_session_async(session_id: str, user_id: str) -> None:
     from app.core.database import AsyncSessionLocal
     from app.models.session import Session as MasteringSession
-    from app.services.storage import get_s3_client
+    from app.services.storage import download_from_s3
     from app.services.audio_analysis import extract_mel_spectrogram, measure_lufs_true_peak
-    from app.core.config import settings
-    from sqlalchemy import select, update
+    from sqlalchemy import select, update, text
     from uuid import UUID
 
     async with AsyncSessionLocal() as db:
-        await db.execute(f"SELECT set_app_user_id('{user_id}'::uuid)")
+        await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(user_id)})
 
         result = await db.execute(
             select(MasteringSession).where(
@@ -40,9 +39,7 @@ async def _analyze_session_async(session_id: str, user_id: str) -> None:
 
         try:
             if session.input_file_key:
-                s3 = get_s3_client()
-                obj = s3.get_object(Bucket=settings.S3_BUCKET, Key=session.input_file_key)
-                audio_data = obj["Body"].read()
+                audio_data = await download_from_s3(session.input_file_key)
             else:
                 # Free tier: audio not persisted
                 await db.execute(

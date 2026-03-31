@@ -1,7 +1,7 @@
 """Distribution pipeline routes."""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from uuid import UUID
 from datetime import datetime, timezone
 from app.core.database import get_db
@@ -30,7 +30,7 @@ async def create_release(
     Generates ISRC/UPC, builds DDEX ERN 4.3 XML, submits to LabelGrid.
     Requires: Artist tier+, completed session, RAIN-CERT.
     """
-    await db.execute(f"SELECT set_app_user_id('{current_user.user_id}'::uuid)")
+    await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(current_user.user_id)})
 
     # 1. Verify session is complete and owned by user
     sess_result = await db.execute(
@@ -144,7 +144,7 @@ async def get_release_status(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Poll LabelGrid for current distribution status."""
-    await db.execute(f"SELECT set_app_user_id('{current_user.user_id}'::uuid)")
+    await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(current_user.user_id)})
 
     result = await db.execute(
         select(Release).where(

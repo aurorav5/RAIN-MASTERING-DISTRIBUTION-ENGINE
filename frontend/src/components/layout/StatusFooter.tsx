@@ -51,7 +51,7 @@ export function StatusFooter() {
           R&infin;N AI Mastering Engine v6.0 &middot; TheDray Productions / ARCOVEL Technologies International
         </span>
         <span className="text-[9px] text-rain-muted font-mono">
-          International, Centurion, South Africa &middot; Architect: Phil Weyers B&ouml;lke &middot; Built with Claude Opus 4.6
+          International, Centurion, South Africa &middot; Architect: Phil Weyers B&ouml;lke &middot; Built with Claude Sonnet 4.6
         </span>
       </div>
     </div>

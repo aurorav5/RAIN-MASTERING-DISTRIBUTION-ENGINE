@@ -19,11 +19,11 @@ def separate_stems(self, session_id: str, user_id: str) -> None:
 async def _separate_stems_async(session_id: str, user_id: str) -> None:
     from app.core.database import AsyncSessionLocal
     from app.models.session import Session as MasteringSession
-    from sqlalchemy import select
+    from sqlalchemy import select, text
     from uuid import UUID
 
     async with AsyncSessionLocal() as db:
-        await db.execute(f"SELECT set_app_user_id('{user_id}'::uuid)")
+        await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(user_id)})
         result = await db.execute(
             select(MasteringSession).where(
                 MasteringSession.id == UUID(session_id),

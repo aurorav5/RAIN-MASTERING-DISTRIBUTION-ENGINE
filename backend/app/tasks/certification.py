@@ -36,12 +36,12 @@ async def _sign_cert_async(session_id: str, user_id: str) -> None:
     from app.models.session import Session as MasteringSession
     from app.models.cert import RainCert
     from app.models.content_scan import ContentScan
-    from sqlalchemy import select, update
+    from sqlalchemy import select, update, text
     from uuid import UUID, uuid4
     from datetime import datetime, timezone
 
     async with AsyncSessionLocal() as db:
-        await db.execute(f"SELECT set_app_user_id('{user_id}'::uuid)")
+        await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(user_id)})
 
         sess_result = await db.execute(
             select(MasteringSession).where(MasteringSession.id == UUID(session_id))

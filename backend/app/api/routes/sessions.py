@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from uuid import UUID
 from app.core.database import get_db
 from app.api.dependencies import get_current_user, CurrentUser
@@ -92,7 +92,7 @@ async def get_rain_cert(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Returns the RAIN-CERT JSON + Ed25519 signature for a completed session."""
-    await db.execute(f"SELECT set_app_user_id('{current_user.user_id}'::uuid)")
+    await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(current_user.user_id)})
 
     result = await db.execute(
         select(MasteringSession).where(

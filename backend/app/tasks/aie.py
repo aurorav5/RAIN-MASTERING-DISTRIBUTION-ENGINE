@@ -35,11 +35,11 @@ async def _update_aie_async(
     from app.core.database import AsyncSessionLocal
     from app.models.aie import AIEProfile, validate_voice_vector
     from app.models.session import Session as MasteringSession
-    from sqlalchemy import select
+    from sqlalchemy import select, text
     from uuid import UUID
 
     async with AsyncSessionLocal() as db:
-        await db.execute(f"SELECT set_app_user_id('{user_id}'::uuid)")
+        await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(user_id)})
 
         # Idempotency: check if this session was already counted
         # We use session_id as a guard by checking if session.aie_applied is set
