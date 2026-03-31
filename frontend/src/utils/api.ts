@@ -41,6 +41,34 @@ async function request<T>(
   return response.json() as Promise<T>
 }
 
+export interface AnalysisData {
+  input_lufs: number
+  input_true_peak: number
+  spectral_centroid: number
+  crest_factor: number
+  stereo_width: number
+  bass_energy_ratio: number
+  dynamic_range: number
+  sample_rate: number
+  channels: number
+  duration: number
+  output_lufs: number | null
+  output_true_peak: number | null
+  output_dynamic_range: number | null
+  output_stereo_width: number | null
+  output_spectral_centroid: number | null
+}
+
+export interface ProcessResult {
+  session_id: string
+  status: string
+  output_lufs: number
+  output_true_peak: number
+  output_dynamic_range: number
+  output_stereo_width: number
+  output_spectral_centroid: number
+}
+
 export const api = {
   auth: {
     register: (email: string, password: string) =>
@@ -63,5 +91,23 @@ export const api = {
     },
     get: (id: string) => request<{ id: string; status: string; output_lufs?: number }>(`/sessions/${id}`),
     download: (id: string) => `/api/v1/sessions/${id}/download`,
+  },
+  master: {
+    upload: (file: File) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      return request<{ session_id: string; filename: string; format: string; file_size: number; duration: number | null }>(
+        '/master/upload', { method: 'POST', body: fd }, true,
+      )
+    },
+    analysis: (sessionId: string) =>
+      request<AnalysisData>(`/master/${sessionId}/analysis`),
+    process: (sessionId: string, params: Record<string, unknown>) =>
+      request<ProcessResult>(
+        `/master/${sessionId}/process`,
+        { method: 'POST', body: JSON.stringify(params) },
+      ),
+    downloadUrl: (sessionId: string, format: 'wav' | 'mp3') =>
+      `${BASE_URL}/master/${sessionId}/download/${format}`,
   },
 }

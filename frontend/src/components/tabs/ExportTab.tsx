@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useSessionStore } from '@/stores/session'
 import { useAuthStore } from '@/stores/auth'
+import { api } from '@/utils/api'
+import { Download } from 'lucide-react'
 
 const FORMATS = ['WAV', 'FLAC', 'MP3', 'AAC'] as const
 const BIT_DEPTHS = ['16-bit', '24-bit', '32-bit float'] as const
@@ -149,17 +151,30 @@ export default function ExportTab() {
         </div>
       </div>
 
-      {/* Export button */}
-      <button
-        disabled={!canExport}
-        className={`w-full h-10 rounded font-mono text-xs tracking-widest font-bold transition-all ${
-          canExport
-            ? 'bg-gradient-to-r from-rain-purple to-rain-magenta text-white hover:opacity-90'
-            : 'bg-rain-panel border border-rain-border text-rain-muted cursor-not-allowed'
-        }`}
-      >
-        {status !== 'complete' ? 'MASTER FIRST' : !tierGte('spark') ? 'UPGRADE TO EXPORT' : 'EXPORT'}
-      </button>
+      {/* Export buttons — WAV and MP3 from prototype backend */}
+      {canExport && useSessionStore.getState().sessionId ? (
+        <div className="flex gap-3">
+          <a
+            href={api.master.downloadUrl(useSessionStore.getState().sessionId!, format === 'WAV' ? 'wav' : 'mp3')}
+            download
+            className="flex-1 flex items-center justify-center gap-2 h-10 rounded bg-gradient-to-r from-rain-purple to-rain-magenta text-white font-mono text-xs tracking-widest font-bold hover:opacity-90 transition-opacity"
+          >
+            <Download size={14} />
+            EXPORT {format}
+          </a>
+        </div>
+      ) : (
+        <button
+          disabled={!canExport}
+          className={`w-full h-10 rounded font-mono text-xs tracking-widest font-bold transition-all ${
+            canExport
+              ? 'bg-gradient-to-r from-rain-purple to-rain-magenta text-white hover:opacity-90'
+              : 'bg-rain-panel border border-rain-border text-rain-muted cursor-not-allowed'
+          }`}
+        >
+          {status !== 'complete' ? 'MASTER FIRST' : !tierGte('spark') ? 'UPGRADE TO EXPORT' : 'EXPORT'}
+        </button>
+      )}
     </div>
   )
 }

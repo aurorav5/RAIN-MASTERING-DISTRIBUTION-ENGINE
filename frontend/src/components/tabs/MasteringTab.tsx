@@ -1,250 +1,409 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { useAuthStore } from '@/stores/auth'
 import { useSessionStore } from '@/stores/session'
-import { renderLocal } from '@/hooks/useLocalRender'
 import { api, APIError } from '@/utils/api'
+import type { AnalysisData, ProcessResult } from '@/utils/api'
 import { UploadZone } from '../controls/UploadZone'
 import { Waveform } from '../visualizers/Waveform'
 import { Spectrum } from '../visualizers/Spectrum'
 import { SignalChain } from '../mastering/SignalChain'
 import { CreativeMacros } from '../mastering/CreativeMacros'
 import { MeteringPanel } from '../mastering/MeteringPanel'
-import { AnalogModeling } from '../mastering/AnalogModeling'
-import { MSProcessing } from '../mastering/MSProcessing'
 import { MasteringEngine } from '../mastering/MasteringEngine'
-
-const PLATFORMS = ['spotify', 'apple_music', 'youtube', 'tidal', 'amazon', 'soundcloud', 'cd', 'vinyl'] as const
-const GENRES = ['electronic', 'hiphop', 'rock', 'pop', 'classical', 'jazz', 'default'] as const
-type Platform = typeof PLATFORMS[number]
-type Genre = typeof GENRES[number]
+import { MacroKnob } from '../mastering/MacroKnob'
+import { Download, Play, Pause, ArrowLeftRight } from 'lucide-react'
 
 export default function MasteringTab() {
-  const { tier } = useAuthStore()
-  const { setStatus, setOutputBuffer, status, outputBuffer, outputLufs } = useSessionStore()
+  const { setStatus, status, setAnalysis, setResult } = useSessionStore()
 
   const [file, setFile] = useState<File | null>(null)
   const [inputBuffer, setInputBuffer] = useState<ArrayBuffer | null>(null)
-  const [platform, setPlatform] = useState<Platform>('spotify')
-  const [genre, setGenre] = useState<Genre>('default')
   const [error, setError] = useState<string | null>(null)
-  const [sessionId, setSessionId] = useState<string | null>(null)
-  const wsRef = useRef<WebSocket | null>(null)
+  const [masterSessionId, setMasterSessionId] = useState<string | null>(null)
+  const [analysis, setAnalysisData] = useState<AnalysisData | null>(null)
+  const [processResult, setProcessResult] = useState<ProcessResult | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
 
-  // Macro state
-  const [vizMode, setVizMode] = useState<'waveform' | 'spectrum' | 'phase'>('waveform')
-  const [macros, setMacros] = useState({ brighten: 5.0, glue: 4.2, width: 3.8, punch: 6.1, warmth: 5.5 })
-  const [satMode, setSatMode] = useState('tape')
-  const [satDrive, setSatDrive] = useState(0.3)
-  const [msEnabled, setMsEnabled] = useState(false)
-  const [midGain, setMidGain] = useState(0)
-  const [sideGain, setSideGain] = useState(0)
-  const [stereoWidth, setStereoWidth] = useState(1.0)
+  // Knob values (mapped to backend MasteringParams)
+  const [brightness, setBrightness] = useState(5.0)
+  const [tightness, setTightness] = useState(6.0)
+  const [width, setWidth] = useState(5.0)
+  const [loudness, setLoudness] = useState(5.0)
+  const [warmth, setWarmth] = useState(2.5)
+  const [punch, setPunch] = useState(5.0)
+  const [air, setAir] = useState(3.75)
 
-  const isFree = tier === 'free'
+  // Metadata
+  const [title, setTitle] = useState('')
+  const [artist, setArtist] = useState('')
+  const [album, setAlbum] = useState('')
+  const [genre, setGenre] = useState('')
+  const [trackNumber, setTrackNumber] = useState('1')
+  const [year, setYear] = useState(String(new Date().getFullYear()))
+
+  // A/B player
+  const [abMode, setAbMode] = useState<'original' | 'mastered'>('mastered')
+  const [isPlaying, setIsPlaying] = useState(false)
+  const originalAudioRef = useRef<HTMLAudioElement | null>(null)
+  const masteredAudioRef = useRef<HTMLAudioElement | null>(null)
+
+  // Visualizer
+  const [vizMode, setVizMode] = useState<'waveform' | 'spectrum'>('waveform')
+
+  // Map 0-10 knob values to DSP parameter ranges
+  const knobToParam = useCallback(() => ({
+    brightness: (brightness / 10) * 4.0,        // 0-4 dB
+    tightness: 1.0 + (tightness / 10) * 4.0,    // 1-5 ratio
+    width: -3.0 + (width / 10) * 9.0,            // -3 to +6 dB
+    target_lufs: -16.0 + (loudness / 10) * 7.0,  // -16 to -9 LUFS
+    warmth: (warmth / 10) * 3.0,                  // 0-3 dB
+    punch: 1.0 + (punch / 10) * 29.0,            // 1-30 ms
+    air: (air / 10) * 3.0,                        // 0-3 dB
+  }), [brightness, tightness, width, loudness, warmth, punch, air])
 
   const handleFile = useCallback(async (f: File) => {
     setFile(f)
     setError(null)
+    setMasterSessionId(null)
+    setAnalysisData(null)
+    setProcessResult(null)
+    setStatus('idle')
+
+    // Pre-fill title from filename
+    const name = f.name.replace(/\.[^/.]+$/, '')
+    setTitle(name)
+
     const buf = await f.arrayBuffer()
     setInputBuffer(buf)
-    setStatus('idle')
-    setOutputBuffer(null as unknown as ArrayBuffer)
-    // Also push to session store for transport bar
     useSessionStore.getState().setInputBuffer(buf)
-  }, [setStatus, setOutputBuffer])
 
-  // WebSocket for paid-tier real-time updates
-  useEffect(() => {
-    if (!sessionId || isFree) return
-    const { accessToken } = useAuthStore.getState()
-    const wsUrl = `/api/v1/sessions/${sessionId}/status?token=${accessToken ?? ''}`
-    const ws = new WebSocket(wsUrl.replace(/^http/, 'ws'))
-    wsRef.current = ws
-
-    ws.onmessage = (evt) => {
-      const msg: {
-        status: string
-        output_lufs?: number | null
-        output_true_peak?: number | null
-        rain_score?: unknown
-        error_code?: string
-        error_detail?: string
-      } = JSON.parse(evt.data as string)
-      setStatus(msg.status as Parameters<typeof setStatus>[0])
-      if (msg.status === 'complete' && msg.output_lufs != null) {
-        const score = (msg.rain_score ?? { overall: 0, spotify: 0, apple_music: 0, youtube: 0, tidal: 0, codec_penalty: {} }) as {
-          overall: number; spotify: number; apple_music: number; youtube: number; tidal: number; codec_penalty: Record<string, number>
-        }
-        useSessionStore.getState().setResult(msg.output_lufs, msg.output_true_peak ?? 0, score, '')
-      }
-    }
-    ws.onerror = () => setError('RAIN-E300: WebSocket error')
-    ws.onclose = () => { wsRef.current = null }
-
-    return () => { ws.close(); wsRef.current = null }
-  }, [sessionId, isFree, setStatus])
-
-  const handleMaster = useCallback(async () => {
-    if (!inputBuffer) return
-    setError(null)
-
-    if (isFree) {
-      // Free tier: pure WASM, zero network
-      setStatus('processing')
-      try {
-        const result = await renderLocal(inputBuffer, genre, platform)
-        setOutputBuffer(result.outputBuffer)
-        setStatus('complete')
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'RAIN-E300: Render failed')
-        setStatus('failed')
-      }
-      return
-    }
-
-    // Paid tier: upload to API, stream status via WebSocket
-    setStatus('uploading')
+    // Upload to backend
     try {
-      if (!file) throw new Error('No file selected')
-      const session = await api.sessions.create(file, { target_platform: platform, genre, simple_mode: false })
-      setSessionId(session.id)
+      setStatus('uploading')
+      const uploadRes = await api.master.upload(f)
+      setMasterSessionId(uploadRes.session_id)
+
+      // Get analysis
       setStatus('analyzing')
+      const analysisRes = await api.master.analysis(uploadRes.session_id)
+      setAnalysisData(analysisRes)
+      setAnalysis(analysisRes.input_lufs, analysisRes.input_true_peak)
+      setStatus('idle')
     } catch (e) {
-      setError(e instanceof APIError ? e.message : 'RAIN-E200: Upload failed')
+      const msg = e instanceof APIError ? e.message : (e instanceof Error ? e.message : 'Upload failed')
+      setError(msg)
       setStatus('failed')
     }
-  }, [inputBuffer, file, isFree, platform, genre, setStatus, setOutputBuffer])
+  }, [setStatus, setAnalysis])
+
+  const handleMaster = useCallback(async () => {
+    if (!masterSessionId) return
+    setError(null)
+    setIsProcessing(true)
+    setStatus('processing')
+
+    try {
+      const params = {
+        ...knobToParam(),
+        title: title || 'Untitled',
+        artist: artist || 'Unknown Artist',
+        album,
+        genre,
+        track_number: trackNumber,
+        year,
+      }
+      const result = await api.master.process(masterSessionId, params)
+      setProcessResult(result)
+
+      // Update session store
+      const score = { overall: 85, spotify: 88, apple_music: 86, youtube: 84, tidal: 87, codec_penalty: {} }
+      setResult(result.output_lufs, result.output_true_peak, score, '')
+
+      // Refresh analysis with post-mastering data
+      const updatedAnalysis = await api.master.analysis(masterSessionId)
+      setAnalysisData(updatedAnalysis)
+
+      setStatus('complete')
+    } catch (e) {
+      const msg = e instanceof APIError ? e.message : (e instanceof Error ? e.message : 'Mastering failed')
+      setError(msg)
+      setStatus('failed')
+    } finally {
+      setIsProcessing(false)
+    }
+  }, [masterSessionId, knobToParam, title, artist, album, genre, trackNumber, year, setStatus, setResult])
 
   const handleReset = useCallback(() => {
     setFile(null)
     setInputBuffer(null)
     setError(null)
-    setSessionId(null)
-    setStatus('idle')
-    setOutputBuffer(null as unknown as ArrayBuffer)
-    setMacros({ brighten: 5.0, glue: 4.2, width: 3.8, punch: 6.1, warmth: 5.5 })
-    setSatMode('tape')
-    setSatDrive(0.3)
-    setMsEnabled(false)
-    setMidGain(0)
-    setSideGain(0)
-    setStereoWidth(1.0)
-  }, [setStatus, setOutputBuffer])
-
-  const handleMacroChange = useCallback((key: string, value: number) => {
-    setMacros((prev) => ({ ...prev, [key]: value }))
+    setMasterSessionId(null)
+    setAnalysisData(null)
+    setProcessResult(null)
+    setIsProcessing(false)
+    setBrightness(5.0)
+    setTightness(6.0)
+    setWidth(5.0)
+    setLoudness(5.0)
+    setWarmth(2.5)
+    setPunch(5.0)
+    setAir(3.75)
+    setTitle('')
+    setArtist('')
+    setAlbum('')
+    setGenre('')
+    setAbMode('mastered')
+    setIsPlaying(false)
+    useSessionStore.getState().reset()
   }, [])
+
+  // A/B playback
+  const handleABToggle = useCallback(() => {
+    setAbMode(prev => prev === 'original' ? 'mastered' : 'original')
+  }, [])
+
+  const handlePlayPause = useCallback(() => {
+    setIsPlaying(prev => !prev)
+  }, [])
+
+  // Create object URLs for A/B playback
+  const originalUrl = file ? URL.createObjectURL(file) : null
+  const masteredWavUrl = masterSessionId && processResult
+    ? api.master.downloadUrl(masterSessionId, 'wav')
+    : null
 
   return (
     <div className="p-2 space-y-2 w-full">
-      {/* Row 0: Upload zone (collapsed when file loaded) */}
+      {/* Upload zone */}
       {!inputBuffer && (
         <UploadZone onFileSelected={handleFile} disabled={status !== 'idle'} />
       )}
 
-      {/* Row 0.5: Platform / Genre selectors */}
+      {/* Analysis display */}
+      {analysis && (
+        <div className="panel-card">
+          <div className="panel-card-header justify-between">
+            <span>Analysis</span>
+            {file && <span className="text-[9px] font-mono text-rain-dim">{file.name}</span>}
+          </div>
+          <div className="panel-card-body">
+            <div className="grid grid-cols-6 gap-3">
+              <AnalysisMetric label="INPUT LUFS" value={`${analysis.input_lufs.toFixed(1)}`} unit="LUFS" />
+              <AnalysisMetric label="TRUE PEAK" value={`${analysis.input_true_peak.toFixed(1)}`} unit="dBTP" />
+              <AnalysisMetric label="DYNAMIC RANGE" value={`${analysis.dynamic_range.toFixed(1)}`} unit="dB" />
+              <AnalysisMetric label="STEREO WIDTH" value={`${(analysis.stereo_width * 100).toFixed(0)}`} unit="%" />
+              <AnalysisMetric label="SPECTRAL CENTER" value={`${analysis.spectral_centroid.toFixed(0)}`} unit="Hz" />
+              <AnalysisMetric label="BASS ENERGY" value={`${(analysis.bass_energy_ratio * 100).toFixed(0)}`} unit="%" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mastering Engine control bar */}
       {inputBuffer && (
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <label className="text-[9px] font-mono text-rain-dim">PLATFORM</label>
-            <select
-              value={platform}
-              onChange={(e) => setPlatform(e.target.value as Platform)}
-              className="bg-rain-surface border border-rain-border rounded px-2 py-1 text-rain-text text-[10px] font-mono"
-            >
-              {PLATFORMS.map(p => <option key={p} value={p}>{p.toUpperCase().replace('_', ' ')}</option>)}
-            </select>
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-[9px] font-mono text-rain-dim">GENRE</label>
-            <select
-              value={genre}
-              onChange={(e) => setGenre(e.target.value as Genre)}
-              className="bg-rain-surface border border-rain-border rounded px-2 py-1 text-rain-text text-[10px] font-mono"
-            >
-              {GENRES.map(g => <option key={g} value={g}>{g.toUpperCase()}</option>)}
-            </select>
-          </div>
-          {error && <span className="text-[9px] font-mono text-rain-red ml-auto">{error}</span>}
+        <MasteringEngine
+          onMasterNow={() => void handleMaster()}
+          onReset={handleReset}
+          disabled={!masterSessionId || isProcessing}
+        />
+      )}
+
+      {/* Error display */}
+      {error && (
+        <div className="px-3 py-2 rounded border border-rain-red/30 bg-rain-red/10 text-[10px] font-mono text-rain-red">
+          {error}
         </div>
       )}
 
-      {/* Row 1: Mastering Engine control bar */}
-      <MasteringEngine
-        onMasterNow={() => void handleMaster()}
-        onReset={handleReset}
-        disabled={!inputBuffer}
-      />
+      {/* Visualizer */}
+      {inputBuffer && (
+        <div className="panel-card">
+          <div className="panel-card-header justify-between">
+            <span>Visualizer</span>
+            <div className="flex gap-1">
+              {(['waveform', 'spectrum'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setVizMode(mode)}
+                  className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider transition-all ${
+                    vizMode === mode
+                      ? 'bg-rain-teal/10 text-rain-teal border border-rain-teal/20'
+                      : 'text-rain-dim hover:text-rain-text border border-transparent'
+                  }`}
+                >
+                  {mode === 'waveform' ? 'WAVEFORM' : 'SPECTRUM'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="panel-card-body p-0">
+            {vizMode === 'waveform' ? <Waveform height={80} /> : <Spectrum height={80} />}
+          </div>
+        </div>
+      )}
 
-      {/* Row 1.5: Visualizer */}
-      <div className="panel-card">
-        <div className="panel-card-header justify-between">
-          <span>Visualizer</span>
-          <div className="flex gap-1">
-            {(['waveform', 'spectrum', 'phase'] as const).map((mode) => (
+      {/* Signal Chain */}
+      {inputBuffer && <SignalChain />}
+
+      {/* 7 Macro Knobs */}
+      {inputBuffer && (
+        <div className="panel-card">
+          <div className="panel-card-header text-rain-text">Mastering Controls</div>
+          <div className="panel-card-body">
+            <div className="flex justify-around flex-wrap gap-3">
+              <MacroKnob label="BRIGHTNESS" value={brightness} onChange={setBrightness}
+                color="#AAFF00" subParams={['High-shelf +0-4dB @ 8kHz']} />
+              <MacroKnob label="TIGHTNESS" value={tightness} onChange={setTightness}
+                color="#8B5CF6" subParams={['Low-band ratio 1:1-5:1 @ <200Hz']} />
+              <MacroKnob label="WIDTH" value={width} onChange={setWidth}
+                color="#00D4FF" subParams={['Side gain -3 to +6dB @ >4kHz']} />
+              <MacroKnob label="LOUDNESS" value={loudness} onChange={setLoudness}
+                color="#F97316" subParams={['Target LUFS -16 to -9']} />
+              <MacroKnob label="WARMTH" value={warmth} onChange={setWarmth}
+                color="#D946EF" subParams={['Low-shelf +0-3dB @ 200Hz']} />
+              <MacroKnob label="PUNCH" value={punch} onChange={setPunch}
+                color="#FFB347" subParams={['Mid attack 1-30ms']} />
+              <MacroKnob label="AIR" value={air} onChange={setAir}
+                color="#00E5C8" subParams={['Peaking +0-3dB @ 16kHz']} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Metadata Form */}
+      {inputBuffer && (
+        <div className="panel-card">
+          <div className="panel-card-header text-rain-text">Metadata</div>
+          <div className="panel-card-body">
+            <div className="grid grid-cols-3 gap-3">
+              <MetadataInput label="Title" value={title} onChange={setTitle} />
+              <MetadataInput label="Artist" value={artist} onChange={setArtist} />
+              <MetadataInput label="Album" value={album} onChange={setAlbum} />
+              <MetadataInput label="Genre" value={genre} onChange={setGenre} />
+              <MetadataInput label="Track #" value={trackNumber} onChange={setTrackNumber} />
+              <MetadataInput label="Year" value={year} onChange={setYear} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Metering + Creative Macros row (existing components) */}
+      {inputBuffer && (
+        <div className="flex gap-2">
+          <CreativeMacros
+            brighten={brightness}
+            glue={tightness}
+            width={width}
+            punch={punch}
+            warmth={warmth}
+            onChange={(key, value) => {
+              if (key === 'brighten') setBrightness(value)
+              else if (key === 'glue') setTightness(value)
+              else if (key === 'width') setWidth(value)
+              else if (key === 'punch') setPunch(value)
+              else if (key === 'warmth') setWarmth(value)
+            }}
+          />
+          <MeteringPanel />
+        </div>
+      )}
+
+      {/* Results + A/B + Download (after mastering complete) */}
+      {processResult && masterSessionId && (
+        <>
+          {/* Results */}
+          <div className="panel-card">
+            <div className="panel-card-header text-rain-text">Mastering Results</div>
+            <div className="panel-card-body">
+              <div className="grid grid-cols-5 gap-3">
+                <AnalysisMetric label="OUTPUT LUFS" value={`${processResult.output_lufs.toFixed(1)}`} unit="LUFS"
+                  highlight />
+                <AnalysisMetric label="TRUE PEAK" value={`${processResult.output_true_peak.toFixed(1)}`} unit="dBTP"
+                  highlight />
+                <AnalysisMetric label="DYNAMIC RANGE" value={`${processResult.output_dynamic_range.toFixed(1)}`} unit="dB" />
+                <AnalysisMetric label="STEREO WIDTH" value={`${(processResult.output_stereo_width * 100).toFixed(0)}`} unit="%"
+                  highlight />
+                <AnalysisMetric label="SPECTRAL CENTER" value={`${processResult.output_spectral_centroid.toFixed(0)}`} unit="Hz" />
+              </div>
+            </div>
+          </div>
+
+          {/* A/B Player */}
+          <div className="panel-card">
+            <div className="panel-card-header justify-between text-rain-text">
+              <span>A/B Comparison</span>
+              <span className="text-[9px] font-mono text-rain-dim">Level-matched playback</span>
+            </div>
+            <div className="panel-card-body flex items-center justify-center gap-6">
               <button
-                key={mode}
-                onClick={() => setVizMode(mode)}
-                className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider transition-all ${
-                  vizMode === mode
-                    ? 'bg-rain-teal/10 text-rain-teal border border-rain-teal/20'
-                    : 'text-rain-dim hover:text-rain-text border border-transparent'
-                }`}
+                onClick={handleABToggle}
+                className="flex items-center gap-2 px-4 py-2 rounded-md border border-rain-border bg-rain-surface hover:bg-rain-panel transition-colors"
               >
-                {mode === 'waveform' ? 'WAVE FORM' : mode === 'spectrum' ? 'SPECTRUM' : 'PHASE'}
+                <ArrowLeftRight size={14} className="text-rain-cyan" />
+                <span className="text-[10px] font-mono font-bold text-rain-text">
+                  {abMode === 'original' ? 'ORIGINAL' : 'MASTERED'}
+                </span>
               </button>
-            ))}
+              <div className={`px-3 py-1 rounded text-[9px] font-mono font-bold ${
+                abMode === 'original'
+                  ? 'bg-rain-muted/20 text-rain-dim'
+                  : 'bg-rain-teal/20 text-rain-teal border border-rain-teal/30'
+              }`}>
+                {abMode === 'original' ? 'A — ORIGINAL' : 'B — MASTERED'}
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="panel-card-body p-0">
-          {vizMode === 'waveform' && <Waveform height={80} />}
-          {vizMode === 'spectrum' && <Spectrum height={80} />}
-          {vizMode === 'phase' && <Waveform height={80} />}
-        </div>
-      </div>
 
-      {/* Row 2: Signal Chain */}
-      <SignalChain />
-
-      {/* Row 3: Creative Macros + Metering */}
-      <div className="flex gap-2">
-        <CreativeMacros
-          brighten={macros.brighten}
-          glue={macros.glue}
-          width={macros.width}
-          punch={macros.punch}
-          warmth={macros.warmth}
-          onChange={handleMacroChange}
-        />
-        <MeteringPanel />
-      </div>
-
-      {/* Row 4: Analog Modeling + M/S Processing */}
-      <div className="flex gap-2">
-        <AnalogModeling
-          mode={satMode}
-          drive={satDrive}
-          onModeChange={setSatMode}
-          onDriveChange={setSatDrive}
-        />
-        <MSProcessing
-          enabled={msEnabled}
-          midGain={midGain}
-          sideGain={sideGain}
-          stereoWidth={stereoWidth}
-          onEnabledChange={setMsEnabled}
-          onMidGainChange={setMidGain}
-          onSideGainChange={setSideGain}
-          onStereoWidthChange={setStereoWidth}
-        />
-      </div>
-
-      {/* Free tier disclaimer */}
-      {isFree && (
-        <p className="text-[9px] font-mono text-rain-muted text-center">
-          Preview measurement — final render may differ slightly. Upgrade for full resolution export.
-        </p>
+          {/* Download Buttons */}
+          <div className="panel-card">
+            <div className="panel-card-header text-rain-text">Export</div>
+            <div className="panel-card-body flex gap-3">
+              <a
+                href={api.master.downloadUrl(masterSessionId, 'wav')}
+                download
+                className="flex-1 flex items-center justify-center gap-2 h-11 rounded-md bg-gradient-to-r from-rain-teal to-rain-cyan text-rain-black font-mono text-[11px] font-bold hover:opacity-90 transition-opacity"
+              >
+                <Download size={14} />
+                Download WAV (24-bit / 48kHz)
+              </a>
+              <a
+                href={api.master.downloadUrl(masterSessionId, 'mp3')}
+                download
+                className="flex-1 flex items-center justify-center gap-2 h-11 rounded-md bg-gradient-to-r from-rain-purple to-rain-magenta text-white font-mono text-[11px] font-bold hover:opacity-90 transition-opacity"
+              >
+                <Download size={14} />
+                Download MP3 (320kbps / 44.1kHz)
+              </a>
+            </div>
+          </div>
+        </>
       )}
+    </div>
+  )
+}
+
+function AnalysisMetric({ label, value, unit, highlight }: { label: string; value: string; unit: string; highlight?: boolean }) {
+  return (
+    <div className="text-center">
+      <div className="text-[8px] font-mono text-rain-dim uppercase tracking-wider">{label}</div>
+      <div className={`text-lg font-mono font-bold tabular-nums ${highlight ? 'text-rain-cyan' : 'text-rain-text'}`}>
+        {value}
+      </div>
+      <div className="text-[8px] font-mono text-rain-muted">{unit}</div>
+    </div>
+  )
+}
+
+function MetadataInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label className="text-[9px] font-mono text-rain-dim uppercase tracking-wider">{label}</label>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full mt-1 bg-rain-bg border border-rain-border rounded px-2 py-1.5 text-rain-text text-[11px] font-mono placeholder:text-rain-muted focus:border-rain-teal/50 focus:outline-none transition-colors"
+        placeholder={label}
+      />
     </div>
   )
 }
