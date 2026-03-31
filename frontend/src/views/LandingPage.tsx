@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
+import { analytics } from '@/utils/analytics'
 import {
   Zap, Shield, Cpu, Globe, Music2, Layers, BarChart3,
   ArrowRight, Play, ChevronDown, Disc3, Headphones, Radio
@@ -36,6 +37,7 @@ export default function LandingPage() {
   function handleWaitlistSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (waitlistEmail.trim()) {
+      analytics.track('waitlist_join', { has_referral: false })
       setWaitlistSubmitted(true)
     }
   }
@@ -338,14 +340,14 @@ export default function LandingPage() {
                 </ul>
                 {t.name === 'Enterprise' ? (
                   <button
-                    onClick={() => window.open('mailto:engineering@arcovel.com?subject=RAIN Enterprise Inquiry', '_blank')}
+                    onClick={() => { analytics.track('checkout_started', { tier: 'enterprise', price_id: 'contact' }); window.open('mailto:engineering@arcovel.com?subject=RAIN Enterprise Inquiry', '_blank') }}
                     className={`w-full block text-center text-xs font-bold py-2.5 rounded-lg transition-all btn-ghost`}
                   >
                     {t.cta}
                   </button>
                 ) : (
                   <button
-                    onClick={() => void navigate('/register')}
+                    onClick={() => { analytics.track('checkout_started', { tier: t.name.toLowerCase(), price_id: 'pending' }); void navigate('/register') }}
                     className={`w-full block text-center text-xs font-bold py-2.5 rounded-lg transition-all ${
                       t.featured
                         ? 'btn-primary text-xs py-2.5'

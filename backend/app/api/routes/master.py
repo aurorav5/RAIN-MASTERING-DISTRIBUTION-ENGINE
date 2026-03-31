@@ -404,3 +404,17 @@ async def get_qc_report(session_id: str) -> dict:
     if not qc_report:
         raise HTTPException(status_code=400, detail="QC not yet run (master first)")
     return qc_report.to_dict()
+
+
+@router.get("/pubkey")
+async def get_signing_pubkey() -> dict:
+    """Return the RAIN-CERT Ed25519 public key in PEM format.
+    Used for independent signature verification.
+    """
+    from app.services.provenance import get_public_key_pem
+    return {
+        "alg": "Ed25519",
+        "public_key_pem": get_public_key_pem(),
+        "issuer": "ARCOVEL Technologies International",
+        "purpose": "RAIN-CERT signature verification",
+    }

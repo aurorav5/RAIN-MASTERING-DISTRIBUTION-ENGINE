@@ -7,7 +7,7 @@ from app.core import metrics as _metrics_module  # noqa: F401 — registers all 
 from app.api.routes import (
     auth, upload, billing, sessions, download, aie,
     distribution, suno_import, score, whitelabel, workspaces, lora,
-    master, qc, separate,
+    master, qc, separate, waitlist,
 )
 
 app = FastAPI(
@@ -40,6 +40,8 @@ app.include_router(score.router, prefix="/api/v1")
 app.include_router(whitelabel.router, prefix="/api/v1")
 app.include_router(workspaces.router, prefix="/api/v1")
 app.include_router(lora.router, prefix="/api/v1")
+
+app.include_router(waitlist.router, prefix="/api/v1")
 
 # Prototype mastering routes
 app.include_router(master.router, prefix="/api/v1")

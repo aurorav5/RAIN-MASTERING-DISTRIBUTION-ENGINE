@@ -69,6 +69,14 @@ export interface ProcessResult {
   output_spectral_centroid: number
 }
 
+function get<T>(path: string): Promise<T> {
+  return request<T>(path)
+}
+
+function post<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: 'POST', body: JSON.stringify(body) })
+}
+
 export const api = {
   auth: {
     register: (email: string, password: string) =>
@@ -116,6 +124,31 @@ export const api = {
   },
   qc: {
     platforms: () => request<PlatformTargetData[]>('/qc/platforms'),
+  },
+  billing: {
+    async checkoutSession(priceId: string): Promise<{ url: string; session_id: string }> {
+      return post('/billing/checkout-session', {
+        price_id: priceId,
+        success_url: window.location.origin + '/app?upgraded=true',
+        cancel_url: window.location.origin + '/?checkout=canceled',
+      })
+    },
+    async subscription(): Promise<{ tier: string; status: string; current_period_end: string | null; cancel_at_period_end: boolean }> {
+      return get('/billing/subscription')
+    },
+    async portalSession(): Promise<{ url: string }> {
+      return post('/billing/portal-session', {
+        return_url: window.location.origin + '/app/settings',
+      })
+    },
+  },
+  waitlist: {
+    async join(email: string, referralCode?: string): Promise<{ joined: boolean; position: number }> {
+      return post('/waitlist/join', { email, referral_code: referralCode ?? null })
+    },
+    async count(): Promise<{ count: number }> {
+      return get('/waitlist/count')
+    },
   },
 }
 
