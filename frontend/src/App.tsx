@@ -22,6 +22,9 @@ const MarketTab = lazy(() => import('@/components/tabs/MarketTab'))
 const AnalyticsTab = lazy(() => import('@/components/tabs/AnalyticsTab'))
 const RoadmapTab = lazy(() => import('@/components/tabs/RoadmapTab'))
 const SettingsTab = lazy(() => import('@/components/tabs/SettingsTab'))
+const AIETab = lazy(() =>
+  import('@/components/tabs/AIETab').then((m) => ({ default: m.AIETab }))
+)
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()

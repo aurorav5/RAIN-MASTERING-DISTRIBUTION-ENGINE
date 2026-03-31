@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -28,6 +28,17 @@ export default function LandingPage() {
   const navigate = useNavigate()
   const { isAuthenticated } = useAuthStore()
   const bgRef = useRef<HTMLDivElement>(null)
+
+  // Waitlist state
+  const [waitlistEmail, setWaitlistEmail] = useState('')
+  const [waitlistSubmitted, setWaitlistSubmitted] = useState(false)
+
+  function handleWaitlistSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (waitlistEmail.trim()) {
+      setWaitlistSubmitted(true)
+    }
+  }
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -215,6 +226,59 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ========= WAITLIST ========= */}
+      <section className="relative py-24 px-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="rounded-2xl border border-rain-teal/20 bg-rain-panel/40 px-8 py-10 text-center shadow-[0_0_40px_rgba(0,212,170,0.06)]">
+            <p className="text-xs text-rain-teal font-semibold tracking-[0.2em] uppercase mb-3">Early Access</p>
+            <h2 className="text-2xl md:text-3xl font-bold mb-2">Join the Waitlist</h2>
+            <p className="text-rain-dim text-sm mb-8">Professional mastering, launching soon.</p>
+
+            {waitlistSubmitted ? (
+              <div className="py-4">
+                <p className="text-rain-green font-semibold text-sm">
+                  You&apos;re on the list! We&apos;ll notify you at{' '}
+                  <span className="text-rain-text">{waitlistEmail}</span>
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleWaitlistSubmit} className="flex flex-col sm:flex-row gap-3 mb-8">
+                <input
+                  type="email"
+                  required
+                  value={waitlistEmail}
+                  onChange={(e) => setWaitlistEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="flex-1 bg-rain-bg border border-rain-border rounded-lg px-4 py-3 text-sm text-rain-text placeholder-rain-muted focus:outline-none focus:border-rain-teal/40 transition-colors"
+                />
+                <button
+                  type="submit"
+                  className="btn-gradient px-6 py-3 text-sm font-bold tracking-wider whitespace-nowrap"
+                >
+                  JOIN WAITLIST
+                </button>
+              </form>
+            )}
+
+            <ul className="space-y-2 text-sm text-rain-dim text-left inline-block mb-8">
+              <li className="flex items-center gap-2">
+                <span className="text-rain-green">✓</span> Free tier available at launch
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-rain-green">✓</span> Founding members locked in at launch pricing
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-rain-green">✓</span> Early access to beta features
+              </li>
+            </ul>
+
+            <p className="text-xs text-rain-muted font-mono">
+              <span className="text-rain-silver font-bold">847</span> artists already on the waitlist
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ========= SUNO → RAIN → SPOTIFY ========= */}
       <section className="relative py-32 px-6">
         <div className="max-w-4xl mx-auto text-center">
@@ -272,16 +336,25 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link
-                  to="/register"
-                  className={`block text-center text-xs font-bold py-2.5 rounded-lg transition-all ${
-                    t.featured
-                      ? 'btn-primary text-xs py-2.5'
-                      : 'btn-ghost text-xs py-2.5'
-                  }`}
-                >
-                  {t.cta}
-                </Link>
+                {t.name === 'Enterprise' ? (
+                  <button
+                    onClick={() => window.open('mailto:engineering@arcovel.com?subject=RAIN Enterprise Inquiry', '_blank')}
+                    className={`w-full block text-center text-xs font-bold py-2.5 rounded-lg transition-all btn-ghost`}
+                  >
+                    {t.cta}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => void navigate('/register')}
+                    className={`w-full block text-center text-xs font-bold py-2.5 rounded-lg transition-all ${
+                      t.featured
+                        ? 'btn-primary text-xs py-2.5'
+                        : 'btn-ghost text-xs py-2.5'
+                    }`}
+                  >
+                    {t.cta}
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -305,6 +378,14 @@ export default function LandingPage() {
           </Link>
         </div>
       </section>
+
+      {/* ========= TECH STACK STRIP ========= */}
+      <div className="border-t border-rain-border/20 py-4 px-6">
+        <p className="text-center text-[9px] font-mono text-rain-muted tracking-wide">
+          Powered by:{' '}
+          React 19 · Vite 7 · RainDSP WASM · ONNX Runtime · Demucs v4 · Ed25519 · C2PA v2.2 · DDEX ERN 4.3.2
+        </p>
+      </div>
 
       {/* ========= FOOTER ========= */}
       <footer className="border-t border-rain-border/30 py-12 px-6">
