@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { TierGate } from '../common/TierGate'
 
 const STEM_SLOTS = [
@@ -20,10 +20,16 @@ export default function StemsTab() {
   const [stems, setStems] = useState<Record<string, StemState>>(
     Object.fromEntries(STEM_SLOTS.map(s => [s.id, { muted: false, solo: false, gain: 0 }]))
   )
+  const [separateMsg, setSeparateMsg] = useState<string | null>(null)
 
   const updateStem = (id: string, update: Partial<StemState>) => {
     setStems(prev => ({ ...prev, [id]: { ...prev[id]!, ...update } }))
   }
+
+  const handleSeparate = useCallback(() => {
+    setSeparateMsg('GPU processing required — stem separation available at launch. Upload pre-separated stems via the Suno Import endpoint.')
+    setTimeout(() => setSeparateMsg(null), 5000)
+  }, [])
 
   return (
     <TierGate requiredTier="creator" feature="Stem mastering">
@@ -32,10 +38,18 @@ export default function StemsTab() {
           <h2 className="text-xs font-mono text-rain-dim tracking-widest uppercase">
             6-Stem Separation — Demucs htdemucs_6s
           </h2>
-          <button className="px-3 py-1.5 bg-rain-purple/20 border border-rain-purple/30 rounded text-[10px] font-mono text-rain-purple hover:bg-rain-purple/30 transition-colors">
+          <button
+            onClick={handleSeparate}
+            className="px-3 py-1.5 bg-rain-purple/20 border border-rain-purple/30 rounded text-[10px] font-mono text-rain-purple hover:bg-rain-purple/30 transition-colors"
+          >
             SEPARATE
           </button>
         </div>
+        {separateMsg && (
+          <div className="px-3 py-2 rounded border border-rain-cyan/30 bg-rain-cyan/10 text-[10px] font-mono text-rain-cyan">
+            {separateMsg}
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-3">
           {STEM_SLOTS.map(({ id, label, color }) => {
