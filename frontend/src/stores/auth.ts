@@ -7,11 +7,10 @@ const TIER_RANK: Record<Tier, number> = {
   free: 0, spark: 1, creator: 2, artist: 3, studio_pro: 4, enterprise: 5,
 }
 
-// In development, default to enterprise so all features are testable.
+// Prototype: always enterprise so all features are unlocked and testable.
 // In production, the backend JWT sets the real tier.
-const DEV_MODE = import.meta.env.DEV
-const DEFAULT_TIER: Tier = DEV_MODE ? 'enterprise' : 'free'
-const DEFAULT_AUTH = DEV_MODE
+const DEFAULT_TIER: Tier = 'enterprise'
+const DEFAULT_AUTH = true
 
 interface AuthState {
   accessToken: string | null
@@ -27,10 +26,10 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      accessToken: DEV_MODE ? 'dev-token' : null,
-      refreshToken: DEV_MODE ? 'dev-refresh' : null,
+      accessToken: 'dev-token',
+      refreshToken: 'dev-refresh',
       tier: DEFAULT_TIER,
-      userId: DEV_MODE ? 'dev-user-phil' : null,
+      userId: 'dev-user-phil',
       isAuthenticated: DEFAULT_AUTH,
       setTokens: (access, refresh, tier, userId) =>
         set({ accessToken: access, refreshToken: refresh, tier, userId, isAuthenticated: true }),
@@ -46,6 +45,13 @@ export const useAuthStore = create<AuthState>()(
         tier: s.tier,
         userId: s.userId,
         isAuthenticated: s.isAuthenticated,
+      }),
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<AuthState>),
+        // Prototype: always force enterprise tier regardless of persisted state
+        tier: 'enterprise' as Tier,
+        isAuthenticated: true,
       }),
     }
   )
