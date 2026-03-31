@@ -32,6 +32,9 @@ from app.services.master_engine import (
     INTERNAL_SR,
 )
 from app.services.metadata_engine import write_metadata
+from app.services.feature_extraction import extract_features, FeatureVector
+from app.services.qc_engine import run_qc, QCReport
+from app.services.platform_targets import get_platform_target, list_platform_targets
 
 logger = structlog.get_logger()
 
@@ -134,6 +137,8 @@ async def upload_audio(file: UploadFile = File(...)) -> UploadResponse:
         raw_audio, original_sr = load_audio(input_path)
         audio = normalize_input(raw_audio, original_sr)
         analysis = analyze(audio, INTERNAL_SR, original_sr)
+        # 43-dim feature extraction per RAIN-PLATFORM-SPEC Stage 4
+        features = extract_features(audio, INTERNAL_SR)
     except Exception as e:
         os.unlink(input_path)
         logger.error("upload_analysis_failed", error=str(e), session_id=session_id)
@@ -146,8 +151,10 @@ async def upload_audio(file: UploadFile = File(...)) -> UploadResponse:
         "format": ext.lstrip("."),
         "file_size": len(content),
         "analysis": analysis,
+        "features": features,
         "status": "uploaded",
         "result": None,
+        "qc_report": None,
     }
 
     logger.info(
@@ -257,6 +264,17 @@ async def process_audio(session_id: str, req: ProcessRequest) -> ProcessResponse
             output_true_peak=result.output_true_peak,
         )
 
+        # Run QC (18 automated checks) per RAIN-PLATFORM-SPEC Stage 14
+        raw_output, _ = load_audio(result.output_wav_path)
+        output_audio = normalize_input(raw_output, INTERNAL_SR)
+        platform_slug = req.genre if req.genre in ("vinyl", "podcast") else "spotify"
+        qc_report, _ = run_qc(
+            output_audio, INTERNAL_SR, platform_slug,
+            output_lufs=result.output_lufs,
+            output_true_peak=result.output_true_peak,
+        )
+        session["qc_report"] = qc_report
+
         session["result"] = result
         session["status"] = "complete"
         session["metadata"] = metadata
@@ -266,6 +284,8 @@ async def process_audio(session_id: str, req: ProcessRequest) -> ProcessResponse
             session_id=session_id,
             output_lufs=result.output_lufs,
             output_true_peak=result.output_true_peak,
+            qc_passed=qc_report.passed,
+            qc_checks=len(qc_report.checks),
         )
 
         return ProcessResponse(
@@ -315,3 +335,27 @@ async def download_file(session_id: str, format: str) -> FileResponse:
         filename=filename,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/{session_id}/features")
+async def get_features(session_id: str) -> dict:
+    """Get 43-dimensional feature vector for an uploaded session."""
+    session = _sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    features: FeatureVector = session.get("features")
+    if not features:
+        raise HTTPException(status_code=400, detail="Features not yet extracted")
+    return features.to_dict()
+
+
+@router.get("/{session_id}/qc")
+async def get_qc_report(session_id: str) -> dict:
+    """Get QC report (18 automated checks) for a mastered session."""
+    session = _sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    qc_report: QCReport | None = session.get("qc_report")
+    if not qc_report:
+        raise HTTPException(status_code=400, detail="QC not yet run (master first)")
+    return qc_report.to_dict()
