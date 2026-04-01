@@ -17,9 +17,17 @@ app = FastAPI(
     redoc_url=None,
 )
 
+# CORS: explicit origins only — no wildcards (P0 security fix)
+_cors_origins = [
+    settings.FRONTEND_URL,
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL, "http://localhost:5173", "http://localhost:3000", "*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -44,6 +52,9 @@ app.include_router(lora.router, prefix="/api/v1")
 app.include_router(waitlist.router, prefix="/api/v1")
 
 # Prototype mastering routes
+# WARNING: These routes have NO authentication. They use an in-memory session store
+# and are intended for local development only. Before any network-exposed deployment,
+# add Depends(get_current_user) and move the session store to PostgreSQL with user_id scoping.
 app.include_router(master.router, prefix="/api/v1")
 app.include_router(qc.router, prefix="/api/v1")
 app.include_router(separate.router, prefix="/api/v1")
@@ -54,6 +65,5 @@ async def set_metrics_on_startup() -> None:
     NORMALIZATION_GATE.set(1.0 if settings.RAIN_NORMALIZATION_VALIDATED else 0.0)
 
 
-@app.get("/health")
-async def health() -> dict:
-    return {"status": "ok", "version": settings.RAIN_VERSION, "env": settings.RAIN_ENV}
+# Health endpoint is owned by observability.py via setup_observability().
+# Do NOT add a duplicate @app.get("/health") here.

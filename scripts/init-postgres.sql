@@ -5,14 +5,9 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- Ensure the application user exists (idempotent)
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'rain_app') THEN
-    CREATE ROLE rain_app WITH LOGIN PASSWORD 'changeme';
-  END IF;
-END
-$$;
+-- The rain_app role is created by Docker's POSTGRES_USER env var.
+-- This script only ensures extensions are loaded and privileges are granted.
+-- DO NOT hardcode passwords here — use POSTGRES_PASSWORD env var instead.
 
 -- Grant privileges on the rain database
 GRANT ALL PRIVILEGES ON DATABASE rain TO rain_app;

@@ -219,7 +219,7 @@ async def _check_database() -> dict[str, Any]:
         duration_ms = round((time.monotonic() - start) * 1000, 1)
         await logger.aerror(
             "health_check_database_failed",
-            error_code="RAIN-E100",
+            error_code="RAIN-E810",
             error=str(exc),
             duration_ms=duration_ms,
         )
@@ -248,7 +248,7 @@ async def _check_valkey() -> dict[str, Any]:
         duration_ms = round((time.monotonic() - start) * 1000, 1)
         await logger.aerror(
             "health_check_valkey_failed",
-            error_code="RAIN-E101",
+            error_code="RAIN-E811",
             error=str(exc),
             duration_ms=duration_ms,
         )

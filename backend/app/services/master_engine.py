@@ -503,8 +503,17 @@ def apply_limiter(
         makeup_gain = 10 ** (lufs_diff / 20.0)
         result = result * makeup_gain
 
-    # Final hard clip at ceiling (safety)
-    result = np.clip(result, -ceiling_lin, ceiling_lin)
+    # Final true-peak ceiling enforcement via oversampled peak detection.
+    # The sample-level clip is insufficient — inter-sample peaks can exceed
+    # the ceiling after reconstruction. Re-measure and attenuate if needed.
+    for _ in range(3):
+        tp_db = measure_true_peak(result, sr)
+        if tp_db <= ceiling_dbtp:
+            break
+        # Attenuate by the exact overshoot + 0.1 dB safety margin
+        overshoot_db = tp_db - ceiling_dbtp
+        attenuation = 10 ** (-(overshoot_db + 0.1) / 20.0)
+        result = result * attenuation
 
     return result
 
@@ -533,13 +542,37 @@ def export_wav(
 def export_mp3(
     audio: NDArray[np.float64], sr: int, output_path: str
 ) -> None:
-    """Export as 320kbps MP3 at 44.1kHz with TPDF dither via pydub/ffmpeg."""
+    """Export as 320kbps MP3 at 44.1kHz with TPDF dither via pydub/ffmpeg.
+
+    Applies post-resample LUFS correction to prevent gain injection from the
+    fractional resample (48kHz→44.1kHz kaiser_best filter overshoot).
+    """
     # Resample to 44.1kHz
     if sr != 44100:
-        audio = resampy.resample(audio, sr, 44100, axis=0, filter="kaiser_best")
+        audio_44 = resampy.resample(audio, sr, 44100, axis=0, filter="kaiser_best")
+    else:
+        audio_44 = audio.copy()
+
+    # Post-resample LUFS correction: match the original LUFS exactly
+    meter_src = pyln.Meter(sr)
+    meter_dst = pyln.Meter(44100)
+    lufs_before = meter_src.integrated_loudness(audio)
+    lufs_after = meter_dst.integrated_loudness(audio_44)
+
+    if np.isfinite(lufs_before) and np.isfinite(lufs_after):
+        correction_db = lufs_before - lufs_after
+        if abs(correction_db) > 0.01:
+            correction_lin = 10 ** (correction_db / 20.0)
+            audio_44 = audio_44 * correction_lin
+
+    # Clip any overshoot from the resampler before dithering
+    ceiling_lin = 10 ** (-1.0 / 20.0)  # -1.0 dBTP ceiling
+    peak = np.max(np.abs(audio_44))
+    if peak > ceiling_lin:
+        audio_44 = audio_44 * (ceiling_lin / peak)
 
     # Dither to 16-bit
-    dithered = apply_tpdf_dither(audio, 16)
+    dithered = apply_tpdf_dither(audio_44, 16)
     dithered = np.clip(dithered, -1.0, 1.0 - 1.0 / (2 ** 15))
 
     # Convert to 16-bit integer
@@ -550,7 +583,7 @@ def export_mp3(
         data=int16_data.tobytes(),
         sample_width=2,
         frame_rate=44100,
-        channels=audio.shape[1],
+        channels=audio_44.shape[1],
     )
 
     seg.export(output_path, format="mp3", bitrate="320k", codec="libmp3lame")
