@@ -252,7 +252,7 @@ export default function MasteringTab() {
     setAlbum('')
     setGenre('')
     setAbMode('mastered')
-    useSessionStore.getState().reset()
+    useSessionStore.getState().resetProcessing()
   }, [])
 
   // -- A/B toggle --

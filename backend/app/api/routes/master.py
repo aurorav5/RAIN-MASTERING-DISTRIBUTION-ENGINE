@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -43,6 +43,31 @@ router = APIRouter(prefix="/master", tags=["mastering"])
 
 # In-memory session store for the prototype (no DB dependency)
 _sessions: dict[str, dict[str, Any]] = {}
+
+# Simple IP-based rate limiter for prototype (no auth = no user_id)
+_upload_timestamps: dict[str, list[float]] = {}
+_UPLOAD_RATE_LIMIT = 10
+_UPLOAD_WINDOW_SECONDS = 60.0
+
+
+def _check_upload_rate_limit(client_ip: str) -> None:
+    """Raise 429 if client exceeds upload rate limit."""
+    import time
+    now = time.time()
+    cutoff = now - _UPLOAD_WINDOW_SECONDS
+    timestamps = _upload_timestamps.get(client_ip, [])
+    timestamps = [t for t in timestamps if t > cutoff]
+    if len(timestamps) >= _UPLOAD_RATE_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "RAIN-E102",
+                "message": f"Upload rate limit exceeded ({_UPLOAD_RATE_LIMIT} per {int(_UPLOAD_WINDOW_SECONDS)}s)",
+            },
+        )
+    timestamps.append(now)
+    _upload_timestamps[client_ip] = timestamps
+
 
 ALLOWED_EXTENSIONS = {".wav", ".flac", ".aiff", ".aif", ".mp3"}
 MAX_FILE_SIZE = 200 * 1024 * 1024  # 200MB
@@ -109,8 +134,10 @@ class ProcessResponse(BaseModel):
 
 
 @router.post("/upload", response_model=UploadResponse)
-async def upload_audio(file: UploadFile = File(...)) -> UploadResponse:
+async def upload_audio(request: Request, file: UploadFile = File(...)) -> UploadResponse:
     """Upload an audio file for mastering. Returns session_id for subsequent operations."""
+    client_ip = request.client.host if request.client else "unknown"
+    _check_upload_rate_limit(client_ip)
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
 

@@ -217,7 +217,7 @@ async def _check_database() -> dict[str, Any]:
         return {"status": "ok", "duration_ms": duration_ms}
     except Exception as exc:
         duration_ms = round((time.monotonic() - start) * 1000, 1)
-        await logger.aerror(
+        logger.error(
             "health_check_database_failed",
             error_code="RAIN-E810",
             error=str(exc),
@@ -234,7 +234,7 @@ async def _check_valkey() -> dict[str, Any]:
         import redis.asyncio as aioredis
 
         client = aioredis.from_url(
-            settings.REDIS_URL, socket_connect_timeout=5, decode_responses=True
+            settings.VALKEY_URL, socket_connect_timeout=5, decode_responses=True
         )
         try:
             pong = await client.ping()
@@ -246,7 +246,7 @@ async def _check_valkey() -> dict[str, Any]:
             await client.aclose()
     except Exception as exc:
         duration_ms = round((time.monotonic() - start) * 1000, 1)
-        await logger.aerror(
+        logger.error(
             "health_check_valkey_failed",
             error_code="RAIN-E811",
             error=str(exc),
@@ -275,7 +275,7 @@ async def _check_s3() -> dict[str, Any]:
         return {"status": "ok", "duration_ms": duration_ms}
     except Exception as exc:
         duration_ms = round((time.monotonic() - start) * 1000, 1)
-        await logger.aerror(
+        logger.error(
             "health_check_s3_failed",
             error_code="RAIN-E102",
             error=str(exc),

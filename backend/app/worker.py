@@ -3,8 +3,8 @@ from app.core.config import settings
 
 celery_app = Celery(
     "rain_worker",
-    broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL,
+    broker=settings.VALKEY_URL,
+    backend=settings.VALKEY_URL,
     include=[
         "app.tasks.analysis",
         "app.tasks.render",

@@ -64,6 +64,9 @@ interface SessionState {
   setError: (code: string) => void
   setMacros: (macros: Partial<MacroValues>) => void
   setIsProcessing: (v: boolean) => void
+  /** Reset processing state only — preserves loaded file, macros, and file info. */
+  resetProcessing: () => void
+  /** Full reset — clears everything including loaded audio. */
   reset: () => void
 }
 
@@ -98,6 +101,13 @@ export const useSessionStore = create<SessionState>()((set) => ({
   setError: (code) => set({ errorCode: code, status: 'failed', isProcessing: false }),
   setMacros: (partial) => set((s) => ({ macros: { ...s.macros, ...partial } })),
   setIsProcessing: (v) => set({ isProcessing: v }),
+  resetProcessing: () => set({
+    sessionId: null, status: 'idle', progress: 0,
+    outputBuffer: null,
+    outputLufs: null, outputTruePeak: null,
+    rainScore: null, rainCertId: null, errorCode: null,
+    isProcessing: false,
+  }),
   reset: () => set({
     sessionId: null, status: 'idle', progress: 0,
     inputBuffer: null, outputBuffer: null,

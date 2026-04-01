@@ -9,7 +9,8 @@ class Settings(BaseSettings):
     RAIN_LOG_LEVEL: str = "debug"
 
     DATABASE_URL: str = "postgresql+asyncpg://rain_app:rain@localhost:5432/rain"
-    REDIS_URL: str = "redis://valkey:6379/0"
+    # Canonical name is VALKEY_URL. REDIS_URL accepted for backward compat.
+    VALKEY_URL: str = "redis://valkey:6379/0"
 
     S3_BUCKET: str = "rain-audio"
     S3_ENDPOINT_URL: str = "http://minio:9000"
@@ -48,6 +49,16 @@ class Settings(BaseSettings):
     ACRCLOUD_HOST: str = ""
     ACRCLOUD_ACCESS_KEY: str = ""
     ACRCLOUD_ACCESS_SECRET: str = ""
+
+    # Backward compatibility: accept REDIS_URL env var
+    REDIS_URL: str | None = None
+
+    @model_validator(mode="after")
+    def _compat_redis_url(self) -> "Settings":
+        """If REDIS_URL is set but VALKEY_URL is at default, use REDIS_URL."""
+        if self.REDIS_URL and self.VALKEY_URL == "redis://valkey:6379/0":
+            self.VALKEY_URL = self.REDIS_URL
+        return self
 
     @model_validator(mode="after")
     def check_production_secrets(self) -> "Settings":

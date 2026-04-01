@@ -2,8 +2,16 @@
 # ============================================
 # RAIN AI Mastering Engine v6.0 — Local Runner
 # ============================================
-# Run this file to start RAIN on your machine.
+# Serves the pre-built RAIN frontend locally.
 # Opens in your browser at http://localhost:4173
+#
+# NOTE: This starts the FRONTEND ONLY. The local-first
+# mastering engine runs entirely in your browser via WASM.
+# No backend server is needed for local mastering.
+#
+# To start the full backend stack (API, database, S3):
+#   docker compose up -d
+#   cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000
 #
 # Requirements: Node.js 18+ installed
 # ============================================

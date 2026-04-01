@@ -2,8 +2,13 @@
 REM ============================================
 REM RAIN AI Mastering Engine v6.0 - Local Runner
 REM ============================================
+REM Serves the pre-built RAIN frontend locally.
 REM Double-click this file to start RAIN.
 REM Opens in your browser at http://localhost:4173
+REM
+REM NOTE: This starts the FRONTEND ONLY. The local-first
+REM mastering engine runs entirely in your browser via WASM.
+REM No backend server is needed for local mastering.
 REM
 REM Requirements: Node.js 18+ installed
 REM ============================================

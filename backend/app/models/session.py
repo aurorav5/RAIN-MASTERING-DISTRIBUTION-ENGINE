@@ -1,4 +1,4 @@
-from sqlalchemy import String, Boolean, DateTime, Integer, ForeignKey, Text
+from sqlalchemy import String, Boolean, DateTime, Integer, ForeignKey, Index, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB, NUMERIC
 from sqlalchemy.sql import func
 import uuid
@@ -10,6 +10,10 @@ from datetime import datetime
 
 class Session(Base):
     __tablename__ = "sessions"
+    __table_args__ = (
+        Index("ix_sessions_user_status", "user_id", "status"),
+        Index("ix_sessions_user_created", "user_id", "created_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)

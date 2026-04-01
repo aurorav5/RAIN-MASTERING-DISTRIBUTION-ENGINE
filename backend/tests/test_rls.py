@@ -34,7 +34,7 @@ pytestmark = pytest.mark.skipif(
 os.environ.setdefault("RAIN_ENV", "test")
 os.environ.setdefault("RAIN_VERSION", "6.0.0")
 os.environ.setdefault("RAIN_LOG_LEVEL", "error")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/1")
+os.environ.setdefault("VALKEY_URL", "redis://localhost:6379/1")
 os.environ.setdefault("S3_BUCKET", "rain-test")
 os.environ.setdefault("S3_ENDPOINT_URL", "http://localhost:9000")
 os.environ.setdefault("S3_ACCESS_KEY", "minioadmin")
