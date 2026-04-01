@@ -34,6 +34,61 @@ const QUICK_PROMPTS = [
 ] as const
 
 // ---------------------------------------------------------------------------
+// Restraint System — prevents over-processing (the "taste" layer)
+// ---------------------------------------------------------------------------
+
+function applyRestraints(
+  macros: Partial<MacroValues>,
+  current: MacroValues,
+): { macros: Partial<MacroValues>; warnings: string[] } {
+  const warnings: string[] = []
+  const result = { ...macros }
+
+  for (const [key, val] of Object.entries(result) as [keyof MacroValues, number][]) {
+    const cur = current[key]
+
+    // Gate: already at extreme
+    if (val > cur && cur >= 9.0) {
+      delete result[key]
+      warnings.push(`**${key.toUpperCase()}** is already at ${cur.toFixed(1)} — pushing further risks over-processing`)
+      continue
+    }
+    if (val < cur && cur <= 1.0) {
+      delete result[key]
+      warnings.push(`**${key.toUpperCase()}** is already at ${cur.toFixed(1)} — can't reduce further`)
+      continue
+    }
+  }
+
+  // Gate: warmth + brightness conflict
+  const newWarmth = result.warmth ?? current.warmth
+  const newBrighten = result.brighten ?? current.brighten
+  if (newWarmth > 7.0 && newBrighten > 7.0) {
+    if (result.warmth !== undefined) {
+      result.warmth = Math.min(result.warmth, 7.0)
+      warnings.push('Tempered **WARMTH** — high brightness + warmth together causes muddiness')
+    }
+  }
+
+  // Gate: width mono compatibility
+  if (result.width !== undefined && result.width > 8.0) {
+    result.width = Math.min(result.width, 8.0)
+    warnings.push('Capped **WIDTH** at 8.0 to preserve mono compatibility')
+  }
+
+  // Gate: punch + glue stacking
+  const newPunch = result.punch ?? current.punch
+  const newGlue = result.glue ?? current.glue
+  if (newPunch > 8.0 && newGlue > 8.0) {
+    if (result.punch !== undefined) result.punch = Math.min(result.punch, 8.0)
+    if (result.glue !== undefined) result.glue = Math.min(result.glue, 8.0)
+    warnings.push('Capped **PUNCH** and **GLUE** — stacking both too high crushes dynamics')
+  }
+
+  return { macros: result, warnings }
+}
+
+// ---------------------------------------------------------------------------
 // AI response simulation (local-only when backend unavailable)
 // ---------------------------------------------------------------------------
 
@@ -101,8 +156,21 @@ function generateLocalResponse(query: string, currentMacros: MacroValues): { tex
   }
 
   if (Object.keys(macros).length > 0) {
+    // Apply restraint system
+    const { macros: restrained, warnings } = applyRestraints(macros, currentMacros)
+
+    if (warnings.length > 0) {
+      parts.push('')
+      parts.push('I held back on a few things:')
+      for (const w of warnings) {
+        parts.push(`- ${w}`)
+      }
+    }
+
     parts.push('')
     parts.push("Hit **Apply** to hear the changes, or keep chatting to refine further.")
+
+    return { text: parts.join('\n'), macros: restrained }
   }
 
   return { text: parts.join('\n'), macros }
