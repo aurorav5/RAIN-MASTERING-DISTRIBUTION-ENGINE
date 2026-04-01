@@ -4,6 +4,7 @@ import { TopBar } from '@/components/layout/TopBar'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TransportBar } from '@/components/transport/TransportBar'
 import { StatusFooter } from '@/components/layout/StatusFooter'
+import { AIAssistantOverlay } from '@/components/common/AIAssistantOverlay'
 
 export default function AppLayout() {
   const bgRef = useRef<HTMLDivElement>(null)
@@ -31,6 +32,8 @@ export default function AppLayout() {
         <StatusFooter />
       </div>
       <div ref={bgRef} className="ambient-bg" />
+      {/* Global AI Assistant — floating bubble visible on ALL tabs */}
+      <AIAssistantOverlay />
     </div>
   )
 }
