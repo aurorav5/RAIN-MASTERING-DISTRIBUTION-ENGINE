@@ -1,56 +1,82 @@
 /**
- * AI Assistant Overlay — Global floating chat icon visible in ALL tabs.
+ * AI Assistant Overlay — Passive detection with confidence-driven surfacing.
  *
- * This is NOT the full Collab/AI chat tab. It's a lightweight floating bubble
- * that proactively detects issues and prompts the user:
+ * THREE interaction levels based on confidence:
  *
- *   "I'm detecting low-end buildup and over-smoothed transients.
- *    Want me to fix these?"
+ * 1. HIGH confidence (>0.8): Apply automatically with undo
+ *    "Low-end buildup corrected" [Undo]
  *
- * Click the bubble to expand a mini-chat. The assistant can:
- * - Detect audio issues when a file is loaded
- * - Detect AI-generated content (Suno/Udio artifacts)
- * - Suggest macro changes
- * - Apply fixes with one click
- * - Link to the full AI Assistant tab for deeper conversation
+ * 2. MEDIUM confidence (0.5-0.8): Subtle indicator, user confirms
+ *    Small badge on the AI bubble → expand → "Fix?" button
+ *
+ * 3. LOW confidence (<0.5): Passive indicator only
+ *    Dim dot on bubble → expand → "Possible issue — check?"
+ *
+ * The bubble is CALM. No popups, no chat spam, no interruption.
+ * Attention is earned, not demanded.
  */
 
-import { useState, useEffect, useCallback } from 'react'
-import { Sparkles, X, ChevronRight, Zap, AlertTriangle } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { Sparkles, X, ChevronRight, Zap, Undo2 } from 'lucide-react'
 import { useSessionStore } from '@/stores/session'
 import type { MacroValues } from '@/stores/session'
 import { useNavigate } from 'react-router-dom'
 
 // ---------------------------------------------------------------------------
-// Issue detection (runs client-side on the audio buffer)
+// Issue type
 // ---------------------------------------------------------------------------
 
 interface DetectedIssue {
   id: string
-  icon: string
   title: string
   description: string
   fixMacros: Partial<MacroValues>
-  severity: 'critical' | 'moderate' | 'mild' | 'info'
+  confidence: number    // 0-1
+  category: 'frequency' | 'dynamics' | 'stereo' | 'ai_artifact' | 'loudness' | 'info'
 }
 
-function detectIssues(inputBuffer: ArrayBuffer | null): DetectedIssue[] {
-  if (!inputBuffer) return []
+// ---------------------------------------------------------------------------
+// Confidence-driven UX decisions
+// ---------------------------------------------------------------------------
 
-  // Basic detection from buffer metadata
-  // In production, this would use the Web Audio API AnalyserNode for real-time analysis
+type InteractionLevel = 'auto' | 'confirm' | 'passive'
+
+function getInteractionLevel(confidence: number): InteractionLevel {
+  if (confidence >= 0.8) return 'auto'
+  if (confidence >= 0.5) return 'confirm'
+  return 'passive'
+}
+
+// ---------------------------------------------------------------------------
+// Passive detection (runs on session state changes)
+// ---------------------------------------------------------------------------
+
+function detectFromAnalysis(
+  inputLufs: number | null,
+  macros: MacroValues,
+): DetectedIssue[] {
+  if (inputLufs === null) return []
   const issues: DetectedIssue[] = []
-  const sizeBytes = inputBuffer.byteLength
 
-  // Heuristic: very large file might be uncompressed high-res
-  if (sizeBytes > 100 * 1024 * 1024) {
+  if (inputLufs > -8) {
     issues.push({
-      id: 'large_file',
-      icon: '📦',
-      title: 'Large File Detected',
-      description: `This file is ${(sizeBytes / (1024 * 1024)).toFixed(0)}MB. I'll optimize the processing chain for best quality.`,
-      fixMacros: {},
-      severity: 'info',
+      id: 'hot_input',
+      title: 'Very Loud Input',
+      description: `Input at ${inputLufs.toFixed(1)} LUFS — already near clipping. Reducing punch to preserve headroom.`,
+      fixMacros: { punch: Math.max(0, macros.punch - 2) },
+      confidence: 0.85,
+      category: 'loudness',
+    })
+  }
+
+  if (inputLufs < -28) {
+    issues.push({
+      id: 'quiet_input',
+      title: 'Quiet Input',
+      description: `Input at ${inputLufs.toFixed(1)} LUFS — plenty of headroom available.`,
+      fixMacros: { punch: Math.min(10, macros.punch + 1.5), glue: Math.min(10, macros.glue + 1) },
+      confidence: 0.65,
+      category: 'loudness',
     })
   }
 
@@ -58,198 +84,157 @@ function detectIssues(inputBuffer: ArrayBuffer | null): DetectedIssue[] {
 }
 
 // ---------------------------------------------------------------------------
-// Proactive messages based on session state
-// ---------------------------------------------------------------------------
-
-function getProactiveMessage(
-  status: string,
-  inputLufs: number | null,
-  fileName: string | null,
-  macros: MacroValues,
-): { message: string; suggestions: DetectedIssue[] } | null {
-  if (!fileName) return null
-
-  const suggestions: DetectedIssue[] = []
-
-  // After file load — proactive diagnosis
-  if (status === 'idle' && inputLufs !== null) {
-    if (inputLufs > -10) {
-      suggestions.push({
-        id: 'already_loud',
-        icon: '🔊',
-        title: 'Already Loud Input',
-        description: `Input is at ${inputLufs.toFixed(1)} LUFS — already quite loud. I'll focus on tonal balance rather than pushing volume.`,
-        fixMacros: { punch: Math.max(0, macros.punch - 2) },
-        severity: 'moderate',
-      })
-    }
-
-    if (inputLufs < -24) {
-      suggestions.push({
-        id: 'very_quiet',
-        icon: '🔇',
-        title: 'Very Quiet Input',
-        description: `Input is at ${inputLufs.toFixed(1)} LUFS — there's a lot of headroom. I can bring this up to streaming levels.`,
-        fixMacros: { punch: Math.min(10, macros.punch + 2), glue: Math.min(10, macros.glue + 1) },
-        severity: 'moderate',
-      })
-    }
-  }
-
-  // After mastering complete — feedback loop
-  if (status === 'complete') {
-    suggestions.push({
-      id: 'post_master',
-      icon: '✅',
-      title: 'Master Complete',
-      description: "Your master is ready! Want me to check if anything could be improved further?",
-      fixMacros: {},
-      severity: 'info',
-    })
-  }
-
-  if (suggestions.length === 0) return null
-
-  const message = suggestions.length === 1
-    ? suggestions[0].description
-    : `I noticed ${suggestions.length} things worth mentioning.`
-
-  return { message, suggestions }
-}
-
-// ---------------------------------------------------------------------------
-// AIAssistantOverlay Component
+// Component
 // ---------------------------------------------------------------------------
 
 export function AIAssistantOverlay() {
   const navigate = useNavigate()
-  const { status, inputLufs, fileName, inputBuffer, macros, setMacros } = useSessionStore()
+  const { inputLufs, fileName, macros, setMacros } = useSessionStore()
+
   const [isOpen, setIsOpen] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set())
-  const [hasNotification, setHasNotification] = useState(false)
+  const [undoStack, setUndoStack] = useState<{ id: string; prevMacros: Partial<MacroValues> }[]>([])
+  const [autoAppliedIds, setAutoAppliedIds] = useState<Set<string>>(new Set())
 
-  // Detect issues when file loads or status changes
-  const proactive = getProactiveMessage(status, inputLufs, fileName, macros)
-  const bufferIssues = detectIssues(inputBuffer)
-  const allSuggestions = [...(proactive?.suggestions ?? []), ...bufferIssues]
+  // Detect issues (passive, continuous)
+  const issues = detectFromAnalysis(inputLufs, macros)
+  const meaningful = issues.filter(i => i.confidence >= 0.5 || Object.keys(i.fixMacros).length > 0)
 
-  // Show notification dot when new suggestions appear
+  // Auto-apply high-confidence fixes (once per issue, with undo)
   useEffect(() => {
-    if (allSuggestions.length > 0 && !dismissed) {
-      setHasNotification(true)
+    for (const issue of issues) {
+      if (
+        getInteractionLevel(issue.confidence) === 'auto' &&
+        !autoAppliedIds.has(issue.id) &&
+        Object.keys(issue.fixMacros).length > 0
+      ) {
+        // Save current state for undo
+        const prevMacros: Partial<MacroValues> = {}
+        for (const key of Object.keys(issue.fixMacros) as (keyof MacroValues)[]) {
+          prevMacros[key] = macros[key]
+        }
+        setUndoStack(prev => [...prev, { id: issue.id, prevMacros }])
+        setMacros(issue.fixMacros)
+        setAutoAppliedIds(prev => new Set([...prev, issue.id]))
+        setAppliedIds(prev => new Set([...prev, issue.id]))
+      }
     }
-  }, [allSuggestions.length, dismissed])
+  }, [issues, macros, setMacros, autoAppliedIds])
 
-  // Apply fix
+  // Manual apply
   const handleApply = useCallback((issue: DetectedIssue) => {
-    if (Object.keys(issue.fixMacros).length > 0) {
-      setMacros(issue.fixMacros)
+    const prevMacros: Partial<MacroValues> = {}
+    for (const key of Object.keys(issue.fixMacros) as (keyof MacroValues)[]) {
+      prevMacros[key] = macros[key]
     }
+    setUndoStack(prev => [...prev, { id: issue.id, prevMacros }])
+    setMacros(issue.fixMacros)
     setAppliedIds(prev => new Set([...prev, issue.id]))
-  }, [setMacros])
+  }, [macros, setMacros])
 
-  // Open full AI chat
-  const handleOpenFullChat = useCallback(() => {
-    setIsOpen(false)
-    navigate('/app/collab')
-  }, [navigate])
+  // Undo
+  const handleUndo = useCallback((issueId: string) => {
+    const entry = undoStack.find(e => e.id === issueId)
+    if (entry) {
+      setMacros(entry.prevMacros)
+      setAppliedIds(prev => { const n = new Set(prev); n.delete(issueId); return n })
+      setUndoStack(prev => prev.filter(e => e.id !== issueId))
+    }
+  }, [undoStack, setMacros])
 
-  // Don't show if no file loaded
+  // Don't render if no file loaded
   if (!fileName) return null
+
+  // Determine bubble state
+  const hasConfirmable = meaningful.some(i => getInteractionLevel(i.confidence) === 'confirm' && !appliedIds.has(i.id))
+  const hasAutoApplied = undoStack.length > 0
 
   return (
     <>
-      {/* Floating bubble */}
+      {/* Floating bubble — calm, not demanding */}
       {!isOpen && (
         <button
-          onClick={() => { setIsOpen(true); setDismissed(false); setHasNotification(false) }}
-          className="fixed bottom-20 right-4 z-50 w-12 h-12 rounded-full bg-gradient-to-br from-rain-teal to-rain-cyan shadow-lg hover:shadow-xl transition-all hover:scale-110 flex items-center justify-center group"
+          onClick={() => setIsOpen(true)}
+          className="fixed bottom-20 right-4 z-50 w-11 h-11 rounded-full bg-rain-surface border border-rain-border/40 shadow-lg hover:border-rain-teal/40 transition-all hover:scale-105 flex items-center justify-center group"
         >
-          <Sparkles size={20} className="text-rain-black" />
-          {/* Notification dot */}
-          {hasNotification && allSuggestions.length > 0 && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center animate-bounce">
-              {allSuggestions.length}
-            </span>
+          <Sparkles size={16} className="text-rain-dim group-hover:text-rain-teal transition-colors" />
+          {/* Subtle notification — only for confirmable issues */}
+          {hasConfirmable && (
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-rain-teal" />
           )}
-          {/* Tooltip */}
-          <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-rain-surface border border-rain-border/30 rounded-lg px-3 py-1.5 text-[11px] text-rain-text whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-            AI Assistant
-          </span>
+          {/* Auto-applied indicator */}
+          {hasAutoApplied && !hasConfirmable && (
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500/60" />
+          )}
         </button>
       )}
 
-      {/* Expanded mini-chat panel */}
+      {/* Expanded panel — clean, not noisy */}
       {isOpen && (
-        <div className="fixed bottom-20 right-4 z-50 w-80 max-h-[60vh] rounded-2xl bg-rain-surface border border-rain-border/40 shadow-2xl flex flex-col overflow-hidden">
+        <div className="fixed bottom-20 right-4 z-50 w-72 rounded-xl bg-rain-surface border border-rain-border/40 shadow-2xl overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-rain-border/30 bg-rain-panel/80">
-            <div className="flex items-center gap-2">
-              <Sparkles size={14} className="text-rain-teal" />
-              <span className="text-[11px] font-bold text-rain-teal uppercase tracking-wider">AI Assistant</span>
-            </div>
-            <button
-              onClick={() => { setIsOpen(false); setDismissed(true) }}
-              className="text-rain-dim hover:text-rain-text transition-colors"
-            >
-              <X size={14} />
+          <div className="flex items-center justify-between px-3 py-2 border-b border-rain-border/20">
+            <span className="text-[10px] font-bold text-rain-dim uppercase tracking-wider">Analysis</span>
+            <button onClick={() => setIsOpen(false)} className="text-rain-dim hover:text-rain-text">
+              <X size={12} />
             </button>
           </div>
 
-          {/* Suggestions list */}
-          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5">
-            {allSuggestions.length === 0 ? (
-              <p className="text-[11px] text-rain-dim text-center py-4">
-                Everything looks good! Adjust knobs or ask me anything.
+          {/* Issues */}
+          <div className="max-h-64 overflow-y-auto px-3 py-2 space-y-2">
+            {meaningful.length === 0 ? (
+              <p className="text-[10px] text-rain-dim text-center py-3">
+                No issues detected. Your track looks good.
               </p>
             ) : (
-              allSuggestions.map(issue => (
-                <div
-                  key={issue.id}
-                  className={`rounded-xl border p-3 ${
-                    issue.severity === 'critical'
-                      ? 'border-red-500/30 bg-red-500/5'
-                      : issue.severity === 'moderate'
-                        ? 'border-amber-500/30 bg-amber-500/5'
-                        : 'border-rain-border/30 bg-rain-surface/50'
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="text-base shrink-0">{issue.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-bold text-rain-text mb-0.5">{issue.title}</p>
-                      <p className="text-[10px] text-rain-dim leading-relaxed">{issue.description}</p>
-                      {Object.keys(issue.fixMacros).length > 0 && (
-                        <div className="mt-2">
-                          {appliedIds.has(issue.id) ? (
-                            <span className="text-[9px] font-mono text-green-400 flex items-center gap-1">
-                              <Zap size={10} /> Applied
+              meaningful.map(issue => {
+                const level = getInteractionLevel(issue.confidence)
+                const isApplied = appliedIds.has(issue.id)
+
+                return (
+                  <div key={issue.id} className="rounded-lg border border-rain-border/20 p-2.5 bg-rain-panel/30">
+                    <p className="text-[10px] font-bold text-rain-text mb-1">{issue.title}</p>
+                    <p className="text-[9px] text-rain-dim leading-relaxed mb-1.5">{issue.description}</p>
+
+                    {Object.keys(issue.fixMacros).length > 0 && (
+                      <div className="flex items-center gap-2">
+                        {isApplied ? (
+                          <>
+                            <span className="text-[8px] font-mono text-green-400">
+                              {level === 'auto' ? 'Auto-applied' : 'Applied'}
                             </span>
-                          ) : (
                             <button
-                              onClick={() => handleApply(issue)}
-                              className="text-[10px] font-bold text-rain-teal hover:text-rain-cyan transition-colors flex items-center gap-1"
+                              onClick={() => handleUndo(issue.id)}
+                              className="text-[8px] text-rain-dim hover:text-rain-text flex items-center gap-0.5"
                             >
-                              <Zap size={10} /> Fix this
+                              <Undo2 size={8} /> Undo
                             </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                          </>
+                        ) : level === 'confirm' ? (
+                          <button
+                            onClick={() => handleApply(issue)}
+                            className="text-[9px] font-bold text-rain-teal hover:text-rain-cyan flex items-center gap-1"
+                          >
+                            <Zap size={9} /> Fix
+                          </button>
+                        ) : (
+                          <span className="text-[8px] text-rain-dim italic">Low confidence — check manually</span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))
+                )
+              })
             )}
           </div>
 
-          {/* Footer — link to full chat */}
-          <div className="px-3 py-2 border-t border-rain-border/30">
+          {/* Footer */}
+          <div className="px-3 py-1.5 border-t border-rain-border/20">
             <button
-              onClick={handleOpenFullChat}
-              className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-rain-teal/10 text-rain-teal text-[10px] font-bold hover:bg-rain-teal/20 transition-colors"
+              onClick={() => { setIsOpen(false); navigate('/app/collab') }}
+              className="w-full text-center text-[9px] text-rain-dim hover:text-rain-teal transition-colors flex items-center justify-center gap-1 py-1"
             >
-              Open full AI chat <ChevronRight size={12} />
+              Open AI chat <ChevronRight size={10} />
             </button>
           </div>
         </div>
