@@ -3,12 +3,10 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # System deps
-RUN apt-get update && apt-get install -y \
+RUN apt-get update -o Acquire::Retries=3 && \
+    apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
-    ffmpeg \
-    libchromaprint-dev \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Python deps

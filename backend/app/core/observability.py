@@ -37,17 +37,13 @@ def get_correlation_id() -> str:
 
 # ---------------------------------------------------------------------------
 # Prometheus custom metrics
+# (rain_render_duration_seconds is defined in metrics.py — import from there)
 # ---------------------------------------------------------------------------
+from app.core.metrics import RENDER_DURATION as rain_render_duration_seconds  # noqa: F401
+
 rain_render_queue_depth = Gauge(
     "rain_render_queue_depth",
     "Number of render jobs waiting in the queue",
-)
-
-rain_render_duration_seconds = Histogram(
-    "rain_render_duration_seconds",
-    "Time spent rendering a mastering session",
-    labelnames=["tier"],
-    buckets=[10, 30, 60, 120, 180, 300],
 )
 
 rain_render_cost_dollars_total = Counter(
@@ -111,7 +107,6 @@ def _configure_structlog() -> None:
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
-            structlog.stdlib.filter_by_level,
             structlog.stdlib.add_log_level,
             structlog.processors.TimeStamper(fmt="iso"),
             _add_correlation_id,
