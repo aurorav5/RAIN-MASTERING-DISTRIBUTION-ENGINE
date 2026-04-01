@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Disc3, Layers, Move3D, ShieldCheck, Download, Send,
-  Settings, BarChart3, Rocket, Users, Disc, Database,
+  Settings, BarChart3, Rocket, Users, Disc, Database, Sparkles,
   TestTube2, TrendingUp, ChevronLeft, ChevronRight, Fingerprint,
   BookOpen, ScanSearch, Wrench, FlaskConical,
 } from 'lucide-react'
@@ -43,7 +43,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { to: '/app/qc', label: 'QC', icon: ShieldCheck },
       { to: '/app/aie', label: 'Identity', icon: Fingerprint },
-      { to: '/app/collab', label: 'Collab', icon: Users },
+      { to: '/app/collab', label: 'AI Assistant', icon: Sparkles },
       { to: '/app/export', label: 'Export', icon: Download },
       { to: '/app/distribute', label: 'Distribute', icon: Send },
     ],
