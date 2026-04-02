@@ -4,14 +4,20 @@ RAIN Prototype Mastering Engine — Pure Python DSP Chain
 7-stage mastering pipeline using scipy/numpy. This is the PROTOTYPE engine,
 NOT the production RainDSP C++/WASM engine. Uses identical DSP math in 64-bit float.
 
+RAIN v2 UPGRADE: Target-state driven processing with groove awareness, multi-pass
+optimization, and genre-specific life injection.
+
 Stages:
   1. Input Normalization (resample to 48kHz, 64-bit float)
-  2. Analysis (LUFS, true peak, spectral centroid, crest factor, stereo width, bass energy)
-  3. EQ (brightness + air + subsonic HPF)
-  4. Multiband Compression (3-band: low/mid/high)
-  5. Stereo Widening (M/S with bass mono, side HF boost)
-  6. Limiting (look-ahead limiter with LUFS targeting)
-  7. Output Preparation (WAV 24-bit/48kHz, MP3 320kbps/44.1kHz)
+  2. Analysis (LUFS, true peak, spectral centroid, crest factor, stereo width, bass energy, GROOVE)
+  3. Intent Processing (genre-aware target state calculation)
+  4. EQ (brightness + air + subsonic HPF + genre-forced low-end)
+  5. Multiband Compression (3-band: low/mid/high, groove-aware)
+  6. Stereo Widening (M/S with bass mono, side HF boost, genre-aware)
+  7. Groove Enhancement (transient shaping, microtiming preparation)
+  8. Life Injection (parallel saturation, genre-specific energy)
+  9. Limiting (look-ahead limiter with LUFS targeting)
+  10. Evaluation & Adjustment (multi-pass optimization with rollback)
 """
 
 from __future__ import annotations
@@ -22,7 +28,7 @@ import tempfile
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import pyloudnorm as pyln
@@ -32,8 +38,64 @@ from numpy.typing import NDArray
 from pydub import AudioSegment
 from scipy.signal import butter, sosfilt, sosfiltfilt, resample_poly
 
+# Import RAIN v2 engines
+from .groove_engine import GrooveEngine, GrooveAnalysisResult
+from .intent_engine import IntentResult, ControlSignal
+
 INTERNAL_SR = 48000
 INTERNAL_DTYPE = np.float64
+
+
+@dataclass
+class TargetState:
+    """Target state for proactive mastering (RAIN v2)."""
+    groove: float = 0.75         # Target groove score
+    low_end: float = 0.7         # Target low-end weight
+    energy: float = 0.65         # Target energy level
+    width: float = 0.6           # Target stereo width
+    brightness: float = 4500.0   # Target spectral centroid (Hz)
+    
+    @classmethod
+    def from_genre(cls, genre: str) -> "TargetState":
+        """Create target state based on genre profile."""
+        profiles = {
+            "afropop_house": cls(
+                groove=0.85,
+                low_end=0.8,
+                energy=0.75,
+                width=0.8,
+                brightness=4000.0
+            ),
+            "hiphop": cls(
+                groove=0.8,
+                low_end=0.85,
+                energy=0.7,
+                width=0.5,
+                brightness=3800.0
+            ),
+            "electronic": cls(
+                groove=0.8,
+                low_end=0.75,
+                energy=0.8,
+                width=0.85,
+                brightness=5000.0
+            ),
+            "pop": cls(
+                groove=0.6,
+                low_end=0.6,
+                energy=0.7,
+                width=0.6,
+                brightness=4500.0
+            ),
+            "rock": cls(
+                groove=0.5,
+                low_end=0.65,
+                energy=0.75,
+                width=0.7,
+                brightness=5500.0
+            ),
+        }
+        return profiles.get(genre.lower(), cls())
 
 
 @dataclass
@@ -48,6 +110,12 @@ class AnalysisResult:
     sample_rate: int
     channels: int
     duration: float
+    # RAIN v2 additions
+    groove_score: float = 0.5
+    swing_ratio: float = 1.0
+    timing_variance: float = 0.0
+    transient_sharpness: float = 0.5
+    tempo_bpm: float = 120.0
 
 
 @dataclass
