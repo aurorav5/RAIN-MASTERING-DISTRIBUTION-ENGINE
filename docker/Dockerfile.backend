@@ -1,13 +1,6 @@
-FROM python:3.12-slim
+FROM python:3.12-bookworm
 
 WORKDIR /app
-
-# System deps
-RUN apt-get update -o Acquire::Retries=3 && \
-    apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
 
 # Python deps
 COPY backend/requirements.txt .
@@ -15,10 +8,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # App
 COPY backend/ .
-
-# Non-root user
-RUN useradd -m -u 1000 rain && chown -R rain:rain /app
-USER rain
 
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

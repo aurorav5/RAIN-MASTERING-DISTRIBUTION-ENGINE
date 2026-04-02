@@ -7,5 +7,8 @@ RUN npm ci
 
 COPY frontend/ .
 
-EXPOSE 5173
-CMD ["npm", "run", "dev", "--", "--host"]
+# Build production bundle
+RUN npx vite build
+
+EXPOSE 4173
+CMD ["npx", "vite", "preview", "--host", "0.0.0.0", "--port", "4173"]

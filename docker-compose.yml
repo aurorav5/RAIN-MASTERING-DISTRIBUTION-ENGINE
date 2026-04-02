@@ -126,14 +126,12 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.frontend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
     ports:
-      - "5173:5173"
+      - "4173:4173"
     networks:
       - rain-net
-    command: npm run dev -- --host
+    depends_on:
+      - backend
 
   prometheus:
     image: prom/prometheus:v2.51.0
