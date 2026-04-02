@@ -50,6 +50,14 @@ interface SessionState {
   // Macro values (persist across tab switches)
   macros: MacroValues
 
+  // Metadata (persist across tab switches)
+  title: string
+  artist: string
+  album: string
+  genre: string
+  trackNumber: string
+  year: string
+
   // Processing flag
   isProcessing: boolean
 
@@ -63,6 +71,7 @@ interface SessionState {
   setResult: (outputLufs: number, outputTp: number, score: RainScore, certId: string) => void
   setError: (code: string) => void
   setMacros: (macros: Partial<MacroValues>) => void
+  setMetadata: (meta: Partial<{ title: string; artist: string; album: string; genre: string; trackNumber: string; year: string }>) => void
   setIsProcessing: (v: boolean) => void
   /** Reset processing state only — preserves loaded file, macros, and file info. */
   resetProcessing: () => void
@@ -88,6 +97,7 @@ export const useSessionStore = create<SessionState>()((set) => ({
   outputLufs: null, outputTruePeak: null,
   rainScore: null, rainCertId: null, errorCode: null,
   macros: { ...DEFAULT_MACROS },
+  title: '', artist: '', album: '', genre: '', trackNumber: '1', year: String(new Date().getFullYear()),
   isProcessing: false,
   setSession: (id) => set({ sessionId: id, status: 'uploading' }),
   setStatus: (status, progress = 0) => set({ status, progress }),
@@ -100,6 +110,7 @@ export const useSessionStore = create<SessionState>()((set) => ({
     set({ outputLufs, outputTruePeak: outputTp, rainScore: score, rainCertId: certId, status: 'complete', isProcessing: false }),
   setError: (code) => set({ errorCode: code, status: 'failed', isProcessing: false }),
   setMacros: (partial) => set((s) => ({ macros: { ...s.macros, ...partial } })),
+  setMetadata: (meta) => set((s) => ({ ...s, ...meta })),
   setIsProcessing: (v) => set({ isProcessing: v }),
   resetProcessing: () => set({
     sessionId: null, status: 'idle', progress: 0,
@@ -116,6 +127,7 @@ export const useSessionStore = create<SessionState>()((set) => ({
     outputLufs: null, outputTruePeak: null,
     rainScore: null, rainCertId: null, errorCode: null,
     macros: { ...DEFAULT_MACROS },
+    title: '', artist: '', album: '', genre: '', trackNumber: '1', year: String(new Date().getFullYear()),
     isProcessing: false,
   }),
 }))

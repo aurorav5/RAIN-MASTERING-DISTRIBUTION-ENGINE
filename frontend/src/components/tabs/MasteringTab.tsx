@@ -75,9 +75,10 @@ export default function MasteringTab() {
   const store = useSessionStore()
   const {
     status, sessionId, inputBuffer, fileName, macros,
+    title, artist, album, genre, trackNumber, year,
     isProcessing,
     setStatus, setAnalysis, setResult, setInputBuffer,
-    setFileInfo, setMacros, setIsProcessing, setSession,
+    setFileInfo, setMacros, setMetadata, setIsProcessing, setSession,
   } = store
 
   // -- Local-only UI state (OK to lose on tab switch) --
@@ -86,6 +87,14 @@ export default function MasteringTab() {
   const [processResult, setProcessResult] = useState<ProcessResult | null>(null)
   const [uploadCollapsed, setUploadCollapsed] = useState(!!fileName)
   const macroValues = macros
+
+  // Metadata setters that persist in store
+  const setTitle = useCallback((v: string) => setMetadata({ title: v }), [setMetadata])
+  const setArtist = useCallback((v: string) => setMetadata({ artist: v }), [setMetadata])
+  const setAlbum = useCallback((v: string) => setMetadata({ album: v }), [setMetadata])
+  const setGenre = useCallback((v: string) => setMetadata({ genre: v }), [setMetadata])
+  const setTrackNumber = useCallback((v: string) => setMetadata({ trackNumber: v }), [setMetadata])
+  const setYear = useCallback((v: string) => setMetadata({ year: v }), [setMetadata])
 
   // -- Analog modeling state --
   const [analogMode, setAnalogMode] = useState('tape')
@@ -96,14 +105,6 @@ export default function MasteringTab() {
   const [midGain, setMidGain] = useState(0.0)
   const [sideGain, setSideGain] = useState(0.0)
   const [stereoWidth, setStereoWidth] = useState(1.0)
-
-  // -- Metadata --
-  const [title, setTitle] = useState('')
-  const [artist, setArtist] = useState('')
-  const [album, setAlbum] = useState('')
-  const [genre, setGenre] = useState('')
-  const [trackNumber, setTrackNumber] = useState('1')
-  const [year, setYear] = useState(String(new Date().getFullYear()))
 
   // -- A/B --
   const [abMode, setAbMode] = useState<'original' | 'mastered'>('mastered')
@@ -247,10 +248,6 @@ export default function MasteringTab() {
     setMidGain(0.0)
     setSideGain(0.0)
     setStereoWidth(1.0)
-    setTitle('')
-    setArtist('')
-    setAlbum('')
-    setGenre('')
     setAbMode('mastered')
     useSessionStore.getState().resetProcessing()
   }, [])
