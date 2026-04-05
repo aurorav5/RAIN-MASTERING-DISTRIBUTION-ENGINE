@@ -10,8 +10,8 @@ from app.models.session import Session as MasteringSession
 from app.models.cert import RainCert
 from app.models.release import Release
 from app.schemas.release import ReleaseCreateRequest, ReleaseResponse
-from app.services.identifiers import generate_isrc, generate_upc
-from app.services.ddex import generate_ddex_ern43
+from app.services.identifiers import allocate_isrc, allocate_upc
+from app.services.ddex import generate_ddex_ern43, AIDisclosure
 from app.services import labelgrid
 import structlog
 
@@ -53,13 +53,42 @@ async def create_release(
     if not cert:
         raise HTTPException(400, detail={"code": "RAIN-E600", "message": "RAIN-CERT not issued — wait for certification to complete"})
 
-    # 3. Generate ISRC + UPC
-    isrc = generate_isrc()
-    upc = generate_upc()
+    # 3. Allocate sequential ISRC + UPC from DB counters (ISO 3901 / GS1 compliance)
+    isrc = await allocate_isrc(db)
+    upc = await allocate_upc(db)
 
     # 4. Generate DDEX ERN 4.3 XML
     audio_file_path = session.output_file_key or ""
     duration_seconds = int((session.input_duration_ms or 0) / 1000)
+    # Sept 2025 DDEX AI Disclosure — derived from session state (RainNet usage,
+    # neural restoration, etc.). If the caller flagged the input as AI-generated
+    # via req.ai_generated, we also mark vocals+instrumentation+composition as AI.
+    ai_disclosure = AIDisclosure.from_session(session)
+    if req.ai_generated:
+        ai_disclosure.vocals_ai = True
+        ai_disclosure.instrumentation_ai = True
+        ai_disclosure.composition_ai = True
+        if req.ai_source:
+            ai_disclosure.vocals_tool = req.ai_source
+            ai_disclosure.instrumentation_tool = req.ai_source
+            ai_disclosure.composition_tool = req.ai_source
+        # Recompute overall involvement now that additional flags are set
+        flags = [
+            ai_disclosure.vocals_ai,
+            ai_disclosure.instrumentation_ai,
+            ai_disclosure.composition_ai,
+            ai_disclosure.post_production_ai,
+            ai_disclosure.mixing_mastering_ai,
+        ]
+        count = sum(1 for f in flags if f)
+        if count == 0:
+            ai_disclosure.overall_ai_involvement = "none"
+        elif count <= 2:
+            ai_disclosure.overall_ai_involvement = "partial"
+        elif count == 3:
+            ai_disclosure.overall_ai_involvement = "substantial"
+        else:
+            ai_disclosure.overall_ai_involvement = "full"
     ddex_xml = generate_ddex_ern43(
         release_id=str(req.session_id),
         title=req.title,
@@ -72,8 +101,7 @@ async def create_release(
         genre=req.genre,
         release_date=req.release_date,
         territory=req.territory,
-        ai_generated=req.ai_generated,
-        ai_source=req.ai_source,
+        ai_disclosure=ai_disclosure if ai_disclosure.overall_ai_involvement != "none" else None,
         explicit=req.explicit,
         label_name=req.label_name,
     )

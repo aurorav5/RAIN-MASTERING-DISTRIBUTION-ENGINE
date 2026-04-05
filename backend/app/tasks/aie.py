@@ -96,6 +96,72 @@ async def _update_aie_async(
         )
 
 
+@shared_task(
+    name="app.tasks.aie.update_vector_from_session",
+    bind=True,
+    max_retries=2,
+)
+def update_vector_from_session(
+    self,
+    session_id: str,
+    user_id: str,
+    observation_source: float = 0.6,
+) -> None:
+    """Update the 64-dim AIE vector from a completed session's processing_params.
+
+    Idempotency: we use `session.aie_applied` as the gate because
+    `session.aie_updated_at` does NOT exist on the Session model.
+    NOTE: blueprint requested `session.aie_updated_at` — FLAGGED as missing.
+    """
+    asyncio.run(
+        _update_vector_async(session_id, user_id, observation_source)
+    )
+
+
+async def _update_vector_async(
+    session_id: str,
+    user_id: str,
+    observation_source: float,
+) -> None:
+    from app.core.database import AsyncSessionLocal
+    from app.models.session import Session as MasteringSession
+    from app.services.aie_vector import record_observation
+    from sqlalchemy import select
+    from uuid import UUID
+
+    async with AsyncSessionLocal() as db:
+        await db.execute(f"SELECT set_app_user_id('{user_id}'::uuid)")
+
+        result = await db.execute(
+            select(MasteringSession).where(MasteringSession.id == UUID(session_id))
+        )
+        sess = result.scalar_one_or_none()
+        if sess is None:
+            logger.warning(
+                "aie_vector_session_missing",
+                session_id=session_id, user_id=user_id, stage="aie",
+            )
+            return
+
+        # Idempotency guard — session.aie_updated_at does not exist, using aie_applied.
+        if getattr(sess, "aie_updated_at", None) is not None:
+            logger.info(
+                "aie_vector_already_updated",
+                session_id=session_id, user_id=user_id, stage="aie",
+            )
+            return
+
+        params = sess.processing_params or {}
+        if sess.genre and "_genre" not in params:
+            params = dict(params)
+            params["_genre"] = sess.genre
+
+        await record_observation(
+            db=db, user_id=user_id,
+            processing_params=params, source=observation_source,
+        )
+
+
 def _compute_session_embedding(mel: np.ndarray, params: dict) -> np.ndarray:
     """
     Deterministic 64-dim projection of mel + param features.

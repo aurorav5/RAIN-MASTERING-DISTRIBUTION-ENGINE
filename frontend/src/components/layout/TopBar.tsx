@@ -1,10 +1,20 @@
 import { useAuthStore } from '@/stores/auth'
 import { useSessionStore } from '@/stores/session'
+import { api } from '@/utils/api'
 import { Save, FolderOpen, Settings, HelpCircle } from 'lucide-react'
 
 export function TopBar() {
   const { tier, clearAuth, userId } = useAuthStore()
   const { status } = useSessionStore()
+
+  const handleLogout = async () => {
+    try {
+      await api.auth.logout() // revokes refresh token family server-side
+    } catch {
+      // best-effort — still clear local state
+    }
+    clearAuth()
+  }
 
   const isMastered = status === 'complete'
 
@@ -34,7 +44,7 @@ export function TopBar() {
       {/* Center: Technical badges */}
       <div className="flex items-center gap-2">
         <span className="badge badge-purple">CLAUDE OPUS 4.6</span>
-        <span className="badge badge-cyan">DEMUCS HTDEMUCS_6S</span>
+        <span className="badge badge-cyan">BS-ROFORMER SW</span>
         <span className="badge badge-green">48KHZ &middot; STEREO</span>
       </div>
 
@@ -61,7 +71,7 @@ export function TopBar() {
           <Save size={10} /> SAVE
         </button>
 
-        <button onClick={clearAuth} className="w-7 h-7 rounded flex items-center justify-center text-rain-dim hover:text-rain-text transition-colors" title="Settings">
+        <button onClick={() => { void handleLogout() }} className="w-7 h-7 rounded flex items-center justify-center text-rain-dim hover:text-rain-text transition-colors" title="Sign out">
           <Settings size={14} />
         </button>
       </div>

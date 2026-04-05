@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
 import hashlib
 import structlog
 from app.core.database import get_db
+from app.core.rate_limit import limiter, dynamic_limit
 from app.api.dependencies import get_current_user, CurrentUser
 from app.services.storage import upload_to_s3
 from app.services.quota import check_and_increment_renders
@@ -18,7 +19,9 @@ MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024  # 500 MB
 
 
 @router.post("/", response_model=SessionResponse, status_code=201)
+@limiter.limit(dynamic_limit)
 async def create_session(
+    request: Request,
     params: SessionCreateRequest = Depends(),
     file: UploadFile = File(...),
     current_user: CurrentUser = Depends(get_current_user),

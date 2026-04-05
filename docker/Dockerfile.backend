@@ -2,14 +2,19 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# System deps
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libpq-dev \
-    ffmpeg \
-    chromaprint-tools \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# System deps — retry on transient deb.debian.org network failures
+RUN set -eux; \
+    for i in 1 2 3 4 5; do \
+      apt-get update && \
+      apt-get install -y --fix-missing --no-install-recommends \
+        build-essential \
+        libpq-dev \
+        ffmpeg \
+        libchromaprint-tools \
+        curl \
+      && break || { echo "apt retry $i"; sleep 10; }; \
+    done && \
+    rm -rf /var/lib/apt/lists/*
 
 # Python deps
 COPY backend/requirements.txt .

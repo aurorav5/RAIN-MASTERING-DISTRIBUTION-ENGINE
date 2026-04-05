@@ -1,43 +1,98 @@
-"""ISRC and UPC identifier generation per ISO 3901 and EAN-13."""
-from __future__ import annotations
-import random
-import string
-from datetime import datetime
-import structlog
+"""ISRC and UPC identifier allocation per ISO 3901 and EAN-13/GS1.
 
-logger = structlog.get_logger()
+CRITICAL: Random generation is a bug — globally unique identifiers must come from
+allocated ranges via atomic sequential counters. Distributors reject collisions and
+out-of-range codes. Use the DB-backed counter in `identifier_counters` table.
+"""
+from __future__ import annotations
+from datetime import datetime
+from typing import Literal
+import structlog
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
 
+logger = structlog.get_logger()
 
-def generate_isrc(country: str = "ZA") -> str:
+
+async def allocate_isrc(db: AsyncSession, country: str = "ZA") -> str:
     """
-    Generate ISRC per ISO 3901.
-    Format: CC-XXX-YY-NNNNN (without hyphens in final form)
-    CC = country code (2 alpha), XXX = registrant code (3 alphanumeric),
-    YY = 2-digit year, NNNNN = designation code (5 digits)
+    Allocate next sequential ISRC per ISO 3901.
+    Format: CCXXXYYNNNNN (12 chars, no hyphens).
+      CC = country (2 alpha), XXX = registrant (3 alnum),
+      YY = 2-digit year, NNNNN = designation (5 digits, sequential per year).
+    Raises RuntimeError on counter overflow (>99999 per year — request new registrant range).
     """
     registrant = (settings.ISRC_REGISTRANT_CODE or "ARC")[:3].upper()
     year = datetime.now().year % 100
-    designation = "".join(random.choices(string.digits, k=5))
-    return f"{country}{registrant}{year:02d}{designation}"
+    scope = f"ISRC:{country}:{registrant}:{year:02d}"
+
+    seq = await _next_counter(db, scope, maximum=99999)
+    return f"{country}{registrant}{year:02d}{seq:05d}"
 
 
-def generate_upc() -> str:
+async def allocate_upc(db: AsyncSession) -> str:
     """
-    Generate UPC/EAN-13.
-    Uses GS1 prefix (6 digits) + item number (6 digits) + EAN-13 check digit.
+    Allocate next sequential UPC (EAN-13) from GS1 prefix.
+    Format: PPPPPP-IIIIII-C (12-digit base + EAN-13 check digit).
+    Raises RuntimeError on counter overflow (>999999 — request a new GS1 block).
     """
     prefix = (settings.UPC_GS1_PREFIX or "000000")[:6]
-    item = "".join(random.choices(string.digits, k=6))
-    base = prefix + item  # 12 digits
+    scope = f"UPC:{prefix}"
+
+    seq = await _next_counter(db, scope, maximum=999999)
+    base = f"{prefix}{seq:06d}"  # 12 digits
     check = _ean13_check_digit(base)
     return base + str(check)
 
 
-def _ean13_check_digit(digits: str) -> int:
-    """Compute EAN-13 check digit from 12-digit base."""
-    total = sum(
-        int(d) * (1 if i % 2 == 0 else 3)
-        for i, d in enumerate(digits)
+async def _next_counter(db: AsyncSession, scope: str, maximum: int) -> int:
+    """
+    Atomically increment the counter for `scope` and return the new value.
+    Uses INSERT ... ON CONFLICT DO UPDATE RETURNING for single-roundtrip atomicity.
+    """
+    result = await db.execute(
+        text(
+            """
+            INSERT INTO identifier_counters (scope, next_value)
+            VALUES (:scope, 1)
+            ON CONFLICT (scope)
+            DO UPDATE SET next_value = identifier_counters.next_value + 1
+            RETURNING next_value
+            """
+        ),
+        {"scope": scope},
     )
+    row = result.first()
+    if row is None:
+        raise RuntimeError(f"identifier_counter_allocation_failed scope={scope}")
+    seq: int = row[0]
+    if seq > maximum:
+        logger.error("identifier_range_exhausted", scope=scope, seq=seq, maximum=maximum)
+        raise RuntimeError(
+            f"RAIN-E710 identifier range exhausted scope={scope} — request new allocation"
+        )
+    return seq
+
+
+def _ean13_check_digit(digits: str) -> int:
+    """Compute EAN-13 check digit from 12-digit base (GS1 spec)."""
+    if len(digits) != 12 or not digits.isdigit():
+        raise ValueError(f"EAN-13 base must be 12 digits, got: {digits!r}")
+    total = sum(int(d) * (1 if i % 2 == 0 else 3) for i, d in enumerate(digits))
     return (10 - total % 10) % 10
+
+
+def validate_isrc(isrc: str) -> bool:
+    """Validate ISRC format per ISO 3901."""
+    if len(isrc) != 12:
+        return False
+    return isrc[:2].isalpha() and isrc[2:5].isalnum() and isrc[5:].isdigit()
+
+
+def validate_upc(upc: str) -> bool:
+    """Validate UPC/EAN-13 check digit."""
+    if len(upc) != 13 or not upc.isdigit():
+        return False
+    return _ean13_check_digit(upc[:12]) == int(upc[12])

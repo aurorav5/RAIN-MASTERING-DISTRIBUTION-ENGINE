@@ -20,7 +20,7 @@
     "@tanstack/react-query": "^5.56.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "framer-motion": "^12.38.0",
+    "framer-motion": "^11.18.2",
     "lucide-react": "^0.447.0",
     "onnxruntime-web": "^1.24.3",
     "react": "^18.3.1",

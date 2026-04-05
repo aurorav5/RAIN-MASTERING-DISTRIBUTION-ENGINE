@@ -49,6 +49,19 @@ class Settings(BaseSettings):
     ACRCLOUD_ACCESS_KEY: str = ""
     ACRCLOUD_ACCESS_SECRET: str = ""
 
+    # Provenance (C2PA + AudioSeal) — EU AI Act Art. 50 compliance (2026-08-02)
+    C2PA_SIGNING_CERT_PATH: str = "/etc/rain/c2pa-cert.pem"
+    C2PA_SIGNING_KEY_PATH: str = "/etc/rain/c2pa-key.pem"
+    AUDIOSEAL_MODEL_PATH: str = "/models/audioseal_generator.pth"
+    AUDIOSEAL_KEY_SEED: int = 42  # per-deployment 16-bit message base
+    RAIN_CERT_SIGNING_KEY_PATH: str = "/etc/rain/cert.key"
+    RAIN_WATERMARK_KEY_PATH: str = "/etc/rain/wm.key"
+
+    # Separation (BS-RoFormer) — GPU worker paths
+    BSROFORMER_MODEL_PATH: str = "/models/bs_roformer_sw.ckpt"
+    BSROFORMER_DEVICE: str = "cuda:0"
+    SEPARATION_ENABLED: bool = False  # flip on once model is provisioned
+
     @model_validator(mode="after")
     def check_production_secrets(self) -> "Settings":
         if self.RAIN_ENV == "production":
