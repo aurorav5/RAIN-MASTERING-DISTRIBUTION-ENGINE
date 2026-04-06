@@ -416,14 +416,32 @@ export default function ExportTab() {
       {/* Export buttons — WAV and MP3 from prototype backend */}
       {canExport && useSessionStore.getState().sessionId ? (
         <div className="flex gap-3">
-          <a
-            href={api.master.downloadUrl(useSessionStore.getState().sessionId!, format === 'WAV' ? 'wav' : 'mp3')}
-            download
+          <button
+            onClick={async () => {
+              try {
+                const sid = useSessionStore.getState().sessionId!
+                const fmt = format === 'WAV' ? 'wav' : 'mp3'
+                const token = useAuthStore.getState().accessToken
+                const resp = await fetch(api.master.downloadUrl(sid, fmt), {
+                  headers: token ? { Authorization: `Bearer ${token}` } : {},
+                })
+                if (!resp.ok) throw new Error(`Download failed: ${resp.status}`)
+                const blob = await resp.blob()
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `rain_master_${sid.slice(0, 8)}.${fmt}`
+                a.click()
+                URL.revokeObjectURL(url)
+              } catch (e) {
+                console.error('Export error:', e)
+              }
+            }}
             className="flex-1 flex items-center justify-center gap-2 h-10 rounded bg-gradient-to-r from-rain-purple to-rain-magenta text-white font-mono text-xs tracking-widest font-bold hover:opacity-90 transition-opacity"
           >
             <Download size={14} />
             EXPORT {format}
-          </a>
+          </button>
         </div>
       ) : (
         <button

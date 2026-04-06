@@ -21,7 +21,8 @@ export default function LoginView() {
       setTokens(res.access_token, res.refresh_token, res.tier as Tier, res.user_id)
       void navigate('/app')
     } catch (err) {
-      setError(err instanceof APIError ? err.message : 'Login failed')
+      console.error('Login error:', err)
+      setError(err instanceof APIError ? err.message : String(err))
     } finally {
       setLoading(false)
     }
