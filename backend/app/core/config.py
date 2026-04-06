@@ -61,10 +61,17 @@ class Settings(BaseSettings):
     RAIN_CERT_SIGNING_KEY_PATH: str = "/etc/rain/cert.key"
     RAIN_WATERMARK_KEY_PATH: str = "/etc/rain/wm.key"
 
-    # Separation (BS-RoFormer) — GPU worker paths
-    BSROFORMER_MODEL_PATH: str = "/models/bs_roformer_sw.ckpt"
+    # Separation (BS-RoFormer 4-pass cascade) — GPU worker paths
+    BSROFORMER_MODEL_PATH: str = "ml/checkpoints/bs_roformer_sw.ckpt"
+    BSROFORMER_CONFIG_PATH: str = "ml/checkpoints/bs_roformer_sw.yaml"
+    KARAOKE_MODEL_PATH: str = "ml/checkpoints/karaoke_bs_roformer.ckpt"
+    KARAOKE_CONFIG_PATH: str = "ml/checkpoints/karaoke_bs_roformer.yaml"
+    DRUMSEP_MODEL_PATH: str = "ml/checkpoints/drumsep.ckpt"
+    DRUMSEP_CONFIG_PATH: str = "ml/checkpoints/drumsep.yaml"
+    DEREVERB_MODEL_PATH: str = "ml/checkpoints/dereverb_melband_roformer.ckpt"
+    DEREVERB_CONFIG_PATH: str = "ml/checkpoints/dereverb_melband_roformer.yaml"
     BSROFORMER_DEVICE: str = "cuda:0"
-    SEPARATION_ENABLED: bool = False  # flip on once model is provisioned
+    SEPARATION_ENABLED: bool = False  # flip on once ALL 4 checkpoints are provisioned
 
     # R6 WASM binary integrity — SHA-256 of deployed rain_dsp.wasm.
     # When set, every session's wasm_binary_hash must match or RAIN-E304 fires.
