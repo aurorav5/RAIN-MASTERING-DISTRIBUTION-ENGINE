@@ -25,7 +25,7 @@ def _client() -> aioredis.Redis:
     global _redis
     if _redis is None:
         _redis = aioredis.from_url(
-            settings.REDIS_URL,
+            settings.VALKEY_URL,
             encoding="utf-8",
             decode_responses=True,
             max_connections=50,

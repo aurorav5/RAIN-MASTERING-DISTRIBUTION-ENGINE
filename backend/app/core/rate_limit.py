@@ -25,7 +25,7 @@ def _dynamic_limit(request: Request) -> str:
 
 limiter = Limiter(
     key_func=_identify_user,
-    storage_uri=settings.REDIS_URL,
+    storage_uri=settings.VALKEY_URL,
     default_limits=[],  # no global default — apply via decorator per route
 )
 
