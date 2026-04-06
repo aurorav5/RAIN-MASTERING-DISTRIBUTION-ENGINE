@@ -61,16 +61,30 @@ Same input + same params + same WASM binary = **bit-identical output**, every ti
 - **27 platform loudness targets**: Spotify −14 LUFS, Apple Music −16, Dolby Atmos −18, CD −9, vinyl, broadcast, podcast, and more
 - **46-parameter ProcessingParams schema** — heuristic fallback when ML gate is closed
 
-### Stem Mastering
-- Demucs v4 `htdemucs_6s` — 6-stem separation (vocals, drums, bass, guitar, piano, other)
-- Per-stem EQ (3-band), gain faders, solo/mute
-- SAIL (Stem-Aware Intelligent Limiting) — `sail_stem_gains[6]` applied post-separation
+### 7 Macro Controls
+- **BRIGHTEN** / **GLUE** / **WIDTH** / **PUNCH** / **WARMTH** / **SPACE** / **REPAIR**
+- Emotionally-resonant, non-technical — maps to bounded subsets of 46 DSP parameters
+- RainNet v2 outputs all 7 macros at indices 39-45 via sigmoid x 10 -> [0.0, 10.0]
+- Tension-pair warnings (e.g. BRIGHTEN + WARMTH conflict detection)
+
+### 12-Stem Source Separation
+- **BS-RoFormer SW** cascaded 4-pass pipeline (replaces Demucs v4):
+  - Pass 1: BS-RoFormer SW -> vocals, drums, bass, guitar, piano, other (6 stems)
+  - Pass 2: MVSep Karaoke -> lead vocals + backing vocals
+  - Pass 3: Spectral band-split -> kick, snare, hats, percussion (LarsNet pending)
+  - Pass 4: anvuew dereverb MelBand RoFormer -> room/ambience + dry FX
+- Per-stem gain faders, solo/mute, 12-stem waveform display
+- **SAIL v2** (Stem-Aware Intelligent Limiting) — `sail_stem_gains[12]`, 5 limiter modes, vocal protection
 
 ### Provenance & Compliance
-- **RAIN-CERT**: Ed25519-signed provenance certificates — input hash, output hash, WASM binary hash, processing params
+- **RAIN-CERT**: Ed25519-signed provenance certificates with strict Pydantic validation — input hash, output hash, WASM binary hash, processing params
+- **Synchronous enforcement gate**: output hash verified BEFORE session marked "complete" (RAIN-E305 on mismatch, RAIN-E306 on unsigned cert)
 - **C2PA v2.2**: CBOR-encoded Content Provenance manifests with AI disclosure assertions
-- **DDEX ERN 4.3.2**: Full AI involvement disclosure (September 2025 standard)
-- **EU AI Act Article 50**: Machine-readable AI marking, compliant before August 2, 2026 deadline
+- **AudioSeal**: 16-bit invisible watermarks (Meta, MIT license) — survives compression/re-encoding
+- **Chromaprint**: Audio fingerprints stored in PostgreSQL for content identification
+- **DDEX ERN 4.3**: Full AI involvement disclosure (September 2025 standard, 5 granular areas)
+- **EU AI Act Article 50**: Machine-readable AI marking, `stamp_output` auto-triggered after every render
+- **Public key endpoint**: `GET /api/v1/provenance/public-key` for independent signature verification
 
 ### Distribution
 - Direct-to-DSP delivery via LabelGrid API
@@ -78,11 +92,21 @@ Same input + same params + same WASM binary = **bit-identical output**, every ti
 - Per-platform loudness targeting and codec-aware mastering
 - 4-step distribution wizard: Platforms → Metadata → Review → Status
 
+### AI Co-Master Engineer
+- **Claude Sonnet 4.6** integration (527-line service with 7-macro DSP mapping)
+- **Intent Engine** (404 lines) — natural language -> bounded ProcessingParams deltas
+- **7-dimensional perceptual vector space** with conflict handling
+- **Emotion-to-DSP mapping**: aggressive, calm, euphoric, melancholic presets
+- **Voice control**: Web Speech API for hands-free mastering commands
+- **AIAssistantOverlay**: confidence-driven passive detection (HIGH -> auto+undo / MED -> indicator)
+- **Track diagnosis**: proactive issue detection + Suno/Udio AI-gen artifact detection
+
 ### Artist Identity Engine (AIE)
-- 6-dimensional style fingerprint: Brightness, Warmth, Compression, Width, Low-end, Loudness
-- Mastering history with approval feedback loop
-- Style evolution charting across sessions
-- Custom preference rules (JSON) that persist across sessions
+- **64-dimensional voice vector** (EQ/dynamics/stereo/coloring/genre/meta decomposition)
+- Adaptive EMA: alpha 0.90 stable, 0.60 cold-start (personalizes after 5 sessions)
+- 10 genre centroids (rock, pop, hiphop, electronic, jazz, classical, metal, country, rnb, folk)
+- Observation weights: explicit adjustment 1.0, AI-accepted 0.6, implicit 0.3
+- Exportable as HMAC-SHA256 signed JSON via `GET /api/v1/aie/profile/export`
 
 ---
 
@@ -90,7 +114,7 @@ Same input + same params + same WASM binary = **bit-identical output**, every ti
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 19.2 · Vite 7.3 · TypeScript 5 · Tailwind 4.2 · Framer Motion 12 |
+| Frontend | React 19.2 · Vite 6 · TypeScript 5.5 · Tailwind 4 · Framer Motion 11 |
 | State | Zustand 5 · TanStack Query 5 |
 | Render Engine | RainDSP (C++20/WASM via Emscripten) |
 | ML Inference | ONNX Runtime Web 1.24 (WebGPU → WASM fallback) |
@@ -98,8 +122,9 @@ Same input + same params + same WASM binary = **bit-identical output**, every ti
 | Database | PostgreSQL 18 with RLS |
 | Cache/Queue | Valkey 9.0 (BSD-3-Clause Redis fork) |
 | Object Storage | S3-compatible (MinIO in dev) |
-| Provenance | Ed25519 · C2PA v2.2 · CBOR (RFC 7049) |
-| Distribution | DDEX ERN 4.3.2 · LabelGrid API |
+| Provenance | Ed25519 · C2PA v2.2 · AudioSeal · Chromaprint · CBOR (RFC 7049) |
+| Separation | BS-RoFormer SW · MelBand RoFormer (auto-download via pip) |
+| Distribution | DDEX ERN 4.3 · LabelGrid API |
 | Billing | Stripe |
 | Desktop | Tauri 2.0 (Studio Pro+) |
 | DAW Plugin | JUCE 8 VST3/AU/AAX (Studio Pro+) |
@@ -136,14 +161,26 @@ Annual discount: ~20%. Contact: [engineering@arcovel.com](mailto:engineering@arc
 ```bash
 git clone https://github.com/aurorav5/rain-blueprint.git
 cd rain-blueprint
-git checkout rain/full-upgrade
+git checkout rain/post-audit-sync
 
-# Start the full stack (PostgreSQL 18 + Valkey 9 + backend + frontend)
-docker compose -f docker-compose.prototype.yml up --build
+# Start the full stack (PostgreSQL 18 + Valkey 8.1 + backend + frontend)
+docker compose up --build -d
 
 # Frontend: http://localhost:5173
 # Backend API: http://localhost:8000
 # API docs: http://localhost:8000/docs
+# MinIO console: http://localhost:9001
+# Grafana: http://localhost:3000 (admin / rain_grafana)
+```
+
+### Download ML Models (GPU workers)
+
+```bash
+pip install bs-roformer-infer melband-roformer-infer
+python scripts/download_models.py
+
+# List all 70+ available models:
+python scripts/download_models.py --list
 ```
 
 ### Local Development
@@ -200,7 +237,8 @@ GET    /api/v1/master/{id}/download/mp3   Download MP3 320kbps/44.1kHz
 GET    /api/v1/master/{id}/qc             18-check QC report
 GET    /api/v1/master/{id}/cert           RAIN-CERT Ed25519 certificate
 GET    /api/v1/master/{id}/c2pa           C2PA v2.2 manifest
-GET    /api/v1/master/pubkey              Ed25519 public key for cert verification
+
+GET    /api/v1/provenance/public-key      Ed25519 public key (PEM) for cert verification
 
 GET    /api/v1/qc/platforms               27 platform loudness targets
 
