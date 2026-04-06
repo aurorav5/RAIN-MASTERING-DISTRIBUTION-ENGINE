@@ -53,10 +53,19 @@ def default_params() -> dict[str, Any]:
 
         # SAIL (Stem-Aware Intelligent Limiting)
         "sail_enabled": False,
-        "sail_stem_gains": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # float[6] NOT float[5]
+        "sail_stem_gains": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # float[6] — model output dim
 
         # Vinyl mode
         "vinyl_mode": False,
+
+        # 7 Macro controls (RainNet v2 indices 39-45, sigmoid×10 → [0.0, 10.0])
+        "macro_brighten": 5.0,
+        "macro_glue": 5.0,
+        "macro_width": 5.0,
+        "macro_punch": 5.0,
+        "macro_warmth": 5.0,
+        "macro_space": 5.0,
+        "macro_repair": 0.0,
     }
 
 
@@ -209,8 +218,16 @@ def validate_processing_params(params: dict[str, Any]) -> list[str]:
 
     if "sail_stem_gains" in params:
         sg = params["sail_stem_gains"]
-        if not isinstance(sg, list) or len(sg) != 6:
-            errors.append(f"sail_stem_gains must be float[6], got length {len(sg) if isinstance(sg, list) else type(sg)}")
+        if not isinstance(sg, list) or len(sg) not in (6, 12):
+            errors.append(f"sail_stem_gains must be float[6] or float[12], got length {len(sg) if isinstance(sg, list) else type(sg)}")
+
+    # Validate 7 macros if present (all must be in [0.0, 10.0])
+    for macro_name in ("macro_brighten", "macro_glue", "macro_width", "macro_punch",
+                        "macro_warmth", "macro_space", "macro_repair"):
+        if macro_name in params:
+            v = params[macro_name]
+            if not (0.0 <= v <= 10.0):
+                errors.append(f"{macro_name} {v} out of range [0.0, 10.0]")
 
     for prefix in ("mb_ratio_", ):
         for band in ("low", "mid", "high"):

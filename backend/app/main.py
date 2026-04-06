@@ -75,14 +75,10 @@ app.include_router(lora.router, prefix="/api/v1", dependencies=_protected_deps)
 # Provenance public key (no auth — anyone can verify certs)
 app.include_router(provenance_routes.router, prefix="/api/v1")
 
-# Prototype mastering routes (master_engine + qc_engine + separation from origin/main).
-# WARNING: These routes have NO authentication in this merge state. They use an in-memory
-# session store and are intended for local development only. Before any network-exposed
-# deployment, add Depends(get_current_user) and move the session store to PostgreSQL
-# with user_id scoping + RLS.
-app.include_router(master.router, prefix="/api/v1")
-app.include_router(qc.router, prefix="/api/v1")
-app.include_router(separate.router, prefix="/api/v1")
+# Prototype mastering routes — auth added post-audit
+app.include_router(master.router, prefix="/api/v1", dependencies=_protected_deps)
+app.include_router(qc.router, prefix="/api/v1", dependencies=_protected_deps)
+app.include_router(separate.router, prefix="/api/v1", dependencies=_protected_deps)
 
 
 @app.on_event("startup")

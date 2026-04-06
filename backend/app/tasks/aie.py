@@ -130,7 +130,7 @@ async def _update_vector_async(
     from uuid import UUID
 
     async with AsyncSessionLocal() as db:
-        await db.execute(f"SELECT set_app_user_id('{user_id}'::uuid)")
+        await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(user_id)})
 
         result = await db.execute(
             select(MasteringSession).where(MasteringSession.id == UUID(session_id))

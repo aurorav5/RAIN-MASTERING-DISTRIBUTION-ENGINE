@@ -177,7 +177,16 @@ def load_dereverb_model(device: str | None = None) -> dict:
 
 def _demix(handle: dict, audio: np.ndarray, sr: int) -> dict[str, np.ndarray]:
     """Run ZFTurbo-style demix on audio. Returns dict of stem_name → ndarray."""
-    from utils.model_utils import demix  # from Music-Source-Separation-Training
+    try:
+        from utils.model_utils import demix  # from Music-Source-Separation-Training (pip install)
+    except ImportError:
+        try:
+            from music_source_separation_training.utils.model_utils import demix  # alternate package name
+        except ImportError as e:
+            raise RuntimeError(
+                "RAIN-E621: demix() not available — install music-source-separation-training "
+                "or bs-roformer-infer package on the GPU worker"
+            ) from e
 
     assert sr == _SR_EXPECTED, f"Expected {_SR_EXPECTED} Hz, got {sr}"
     if audio.ndim == 1:

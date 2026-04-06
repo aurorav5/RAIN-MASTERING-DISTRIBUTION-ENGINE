@@ -410,7 +410,7 @@ async def load_or_init_vector(
     Never writes. Caller is responsible for persistence.
     """
     uid_str = str(user_id)
-    await db.execute(text(f"SELECT set_app_user_id('{uid_str}'::uuid)"))
+    await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": uid_str})
 
     row = (await db.execute(
         text(
@@ -476,7 +476,7 @@ async def record_observation(
     new_cold_remaining = max(0, cold_remaining - 1)
     centroid = meta.get("genre_centroid")
 
-    await db.execute(text(f"SELECT set_app_user_id('{uid_str}'::uuid)"))
+    await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": uid_str})
     await db.execute(
         text(
             "INSERT INTO aie_vectors "

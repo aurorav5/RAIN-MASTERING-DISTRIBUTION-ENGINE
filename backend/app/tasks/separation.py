@@ -81,7 +81,7 @@ def separate_bsroformer(self, session_id: str, user_id: str) -> None:
 async def _separate_async(task, session_id: str, user_id: str) -> None:
     from uuid import UUID
 
-    from sqlalchemy import select, update
+    from sqlalchemy import select, text, update
 
     from app.core.config import settings
     from app.core.database import AsyncSessionLocal
@@ -93,7 +93,7 @@ async def _separate_async(task, session_id: str, user_id: str) -> None:
 
     async with AsyncSessionLocal() as db:
         # RLS: set per-request user id before any user-scoped query.
-        await db.execute(f"SELECT set_app_user_id('{user_id}'::uuid)")
+        await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(user_id)})
 
         result = await db.execute(
             select(MasteringSession).where(

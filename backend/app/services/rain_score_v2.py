@@ -235,11 +235,12 @@ def _compute_score_sync(
         score.energy_arc = 2.5
 
     # --- Emotional Impact: Tension Index (max 5) ---
-    # Ratio of loud-to-quiet transitions (contrast)
-    if st_values := globals().get("st_values"):  # noqa — reuse from micro_dynamics
-        pass
-    # Fallback: use crest factor as tension proxy
-    score.tension_index = min(5.0, output_crest / 3.0)
+    # Use short-term loudness variance as tension proxy (computed in micro_dynamics above)
+    if "st_variance" in dir() and st_variance is not None:
+        score.tension_index = min(5.0, st_variance * 2.0)
+    else:
+        # Fallback: use crest factor as tension proxy
+        score.tension_index = min(5.0, output_crest / 3.0)
 
     # --- Emotional Impact: Presence (max 5) ---
     # Energy in 2-5kHz (vocal/lead presence band)

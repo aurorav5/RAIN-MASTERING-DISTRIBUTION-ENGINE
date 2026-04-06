@@ -243,13 +243,13 @@ class InferenceService:
         Returns (params_dict, source) where source is 'rainnet' or 'heuristic'.
         Never raises. Always returns a valid full ProcessingParams dict.
         """
-        from ml.rainnet.heuristics import get_heuristic_params, PLATFORM_LUFS
+        from app.services.heuristic_params import generate_heuristic_params as get_heuristic_params  # noqa: N812
 
         platform_id = self.PLATFORM_ID_MAP.get(platform, 0)
 
         # Cold-start check: zero artist vector means no sessions yet
         if artist_vector is not None and np.all(np.abs(artist_vector) < 1e-8):
-            from ml.rainnet.heuristics import get_heuristic_params
+            from app.services.heuristic_params import generate_heuristic_params as get_heuristic_params  # noqa: N812
             params = get_heuristic_params(genre or "default", platform or "spotify")
             return params, "heuristic_cold_start"
 

@@ -36,7 +36,7 @@ def stamp_output(self, session_id: str, user_id: str) -> None:
 async def _stamp_output_async(session_id: str, user_id: str) -> None:
     from app.core.database import AsyncSessionLocal
     from app.models.session import Session as MasteringSession
-    from sqlalchemy import select, update
+    from sqlalchemy import select, update, text
     from app.services.provenance.c2pa_manifest import (
         build_c2pa_manifest,
         embed_c2pa_into_wav,
@@ -44,7 +44,7 @@ async def _stamp_output_async(session_id: str, user_id: str) -> None:
     from app.services.provenance.fingerprint import compute_sha256
 
     async with AsyncSessionLocal() as db:
-        await db.execute(f"SELECT set_app_user_id('{user_id}'::uuid)")
+        await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(user_id)})
 
         sess_result = await db.execute(
             select(MasteringSession).where(MasteringSession.id == UUID(session_id))
