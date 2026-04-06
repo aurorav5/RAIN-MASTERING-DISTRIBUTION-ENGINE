@@ -35,8 +35,9 @@ class Settings(BaseSettings):
     RAIN_NORMALIZATION_VALIDATED: bool = False
     ANTHROPIC_API_KEY: str = ""
     ONNX_MODEL_PATH: str = "/models/rain_base.onnx"
-    DEMUCS_MODEL: str = "htdemucs_6s"
-    DEMUCS_DEVICE: str = "cpu"
+    GENRE_CLASSIFIER_ENABLED: bool = False
+    CODEC_NET_ENABLED: bool = False
+    ATMOS_HRTF_PATH: str = ""
 
     FRONTEND_URL: str = "http://localhost:5173"
 

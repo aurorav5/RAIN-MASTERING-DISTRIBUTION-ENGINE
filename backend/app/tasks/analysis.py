@@ -89,20 +89,97 @@ async def _analyze_session_async(session_id: str, user_id: str) -> None:
             )
             await db.commit()
 
-def _classify_genre(mel) -> str:
-    """Genre classification fallback.
+_GENRE_LABELS: tuple[str, ...] = (
+    "afropop_house", "hiphop", "electronic", "pop", "rock",
+    "rnb_soul", "jazz", "classical", "latin", "gospel", "podcast",
+)
 
-    Returns 'default' until GenreClassifier ONNX is trained and deployed.
-    Logs RAIN-E401 so the failure is observable in monitoring — not silent.
+_genre_ort_session = None
+
+
+def _classify_genre(mel) -> str:
+    """Genre classification: ONNX inference if enabled, else fallback to 'default'.
+
+    Gate: GENRE_CLASSIFIER_ENABLED must be true and the ONNX checkpoint must
+    exist at ml/checkpoints/genre_classifier.onnx.
     """
-    # TODO(RAIN-ML): Wire ml/genre_classifier/model.py ONNX checkpoint here.
-    # Once available: load checkpoint, run inference on mel, return top-1 genre label.
     import structlog
     _logger = structlog.get_logger()
-    _logger.info(
-        "genre_classifier_fallback",
-        error_code="RAIN-E401",
-        stage="analysis",
-        note="GenreClassifier not deployed — returning 'default'. Train and export ONNX to enable.",
-    )
-    return "default"
+
+    from app.core.config import settings
+    if not getattr(settings, "GENRE_CLASSIFIER_ENABLED", False):
+        _logger.info(
+            "genre_classifier_disabled",
+            stage="analysis",
+            note="GENRE_CLASSIFIER_ENABLED=false — using 'default'",
+        )
+        return "default"
+
+    global _genre_ort_session
+    if _genre_ort_session is None:
+        from pathlib import Path
+        ckpt = Path("ml/checkpoints/genre_classifier.onnx")
+        if not ckpt.exists():
+            _logger.warning(
+                "genre_classifier_checkpoint_missing",
+                error_code="RAIN-E401",
+                stage="analysis",
+                path=str(ckpt),
+            )
+            return "default"
+        try:
+            import onnxruntime as ort
+            _genre_ort_session = ort.InferenceSession(
+                str(ckpt), providers=["CPUExecutionProvider"]
+            )
+        except Exception as e:
+            _logger.error(
+                "genre_classifier_load_failed",
+                error_code="RAIN-E401",
+                stage="analysis",
+                error=str(e),
+            )
+            return "default"
+
+    try:
+        import numpy as np
+        # Prepare input: model expects [B, 1, 128, 128]
+        if mel is None:
+            return "default"
+        mel_input = np.array(mel, dtype=np.float32)
+        if mel_input.ndim == 2:
+            mel_input = mel_input[np.newaxis, np.newaxis, :128, :128]
+        elif mel_input.ndim == 3:
+            mel_input = mel_input[np.newaxis, :, :128, :128]
+
+        # Pad if smaller than 128x128
+        if mel_input.shape[2] < 128 or mel_input.shape[3] < 128:
+            padded = np.zeros((1, 1, 128, 128), dtype=np.float32)
+            h, w = min(128, mel_input.shape[2]), min(128, mel_input.shape[3])
+            padded[0, 0, :h, :w] = mel_input[0, 0, :h, :w]
+            mel_input = padded
+
+        input_name = _genre_ort_session.get_inputs()[0].name
+        output = _genre_ort_session.run(None, {input_name: mel_input})
+        probs = output[0][0]
+
+        # Map to 11 RAIN genres (model has 87 classes, we pick top match from our 11)
+        top_idx = int(np.argmax(probs[:len(_GENRE_LABELS)]))
+        genre = _GENRE_LABELS[top_idx] if top_idx < len(_GENRE_LABELS) else "default"
+
+        _logger.info(
+            "genre_classified",
+            stage="analysis",
+            genre=genre,
+            confidence=float(probs[top_idx]),
+        )
+        return genre
+
+    except Exception as e:
+        _logger.error(
+            "genre_classifier_inference_failed",
+            error_code="RAIN-E401",
+            stage="analysis",
+            error=str(e),
+        )
+        return "default"
