@@ -225,7 +225,12 @@ void* rain_process(
         rain::apply_saturation(left.data(), right.data(), n, params);
     }
 
-    // 5. Apply SAIL (always — handles limiting + normalization)
+    // 5. Apply vinyl RIAA curve (if vinyl_mode — before limiting)
+    if (params.vinyl_mode) {
+        rain::apply_riaa(left.data(), right.data(), n, sampleRate);
+    }
+
+    // 6. Apply SAIL (always — handles limiting + normalization)
     rain::apply_sail(left.data(), right.data(), n, sampleRate, params);
 
     // --- Measure output ---

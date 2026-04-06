@@ -1,4 +1,18 @@
-"""AIE (Artist Identity Engine) profile model."""
+"""AIE (Artist Identity Engine) profile model.
+
+DEPRECATION NOTICE:
+  This model (AIEProfile → aie_profiles table) is the LEGACY AIE system.
+  The canonical AIE is the 64-dim aie_vectors table (migration 0003) with
+  strict Pydantic validation in services/aie_vector.py.
+
+  Migration path:
+  1. New sessions use aie_vectors via update_vector_from_session task
+  2. Old sessions still read AIEProfile via render.py artist_vec lookup
+  3. Once aie_vectors has data for a user, it takes priority
+  4. AIEProfile will be removed in a future migration after data is migrated
+
+  DO NOT add new features to AIEProfile. Use aie_vectors + aie_vector.py.
+"""
 from sqlalchemy import String, DateTime, ForeignKey, Integer
 from sqlalchemy.dialects.postgresql import UUID as PGUUID, ARRAY, REAL, JSONB
 from sqlalchemy.sql import func

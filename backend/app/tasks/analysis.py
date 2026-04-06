@@ -81,5 +81,19 @@ async def _analyze_session_async(session_id: str, user_id: str) -> None:
             await db.commit()
 
 def _classify_genre(mel) -> str:
-    """Stub. Returns 'default' until GenreClassifier ONNX is trained."""
+    """Genre classification fallback.
+
+    Returns 'default' until GenreClassifier ONNX is trained and deployed.
+    Logs RAIN-E401 so the failure is observable in monitoring — not silent.
+    """
+    # TODO(RAIN-ML): Wire ml/genre_classifier/model.py ONNX checkpoint here.
+    # Once available: load checkpoint, run inference on mel, return top-1 genre label.
+    import structlog
+    _logger = structlog.get_logger()
+    _logger.info(
+        "genre_classifier_fallback",
+        error_code="RAIN-E401",
+        stage="analysis",
+        note="GenreClassifier not deployed — returning 'default'. Train and export ONNX to enable.",
+    )
     return "default"

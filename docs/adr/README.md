@@ -18,6 +18,7 @@ This directory contains Architecture Decision Records (ADRs) for RAIN (R∞N). E
 | [0010](0010-64-dim-artist-identity-vector.md) | 64-Dimensional Artist Identity Vector (AIE) | Accepted | 64 dims with semantic decomposition; per-dim EMA α=0.90 stable / α=0.60 cold-start. |
 | [0011](0011-valkey-over-redis.md) | Valkey over Redis | Accepted | Linux Foundation BSD fork, 37% faster SET throughput, drop-in protocol compatible. |
 | [0012](0012-celery-tier-based-queue-routing.md) | Celery Tier-Based Queue Routing | Accepted | Six queues; GPU workers run `--pool solo --concurrency 1 --prefetch-multiplier 1`. |
+| [0013](0013-larsnet-license.md) | LarsNet Drum Separation License Blocker | Accepted | CC BY-NC 4.0 blocks commercial use; spectral fallback interim; custom training or license required. |
 
 ## Format
 

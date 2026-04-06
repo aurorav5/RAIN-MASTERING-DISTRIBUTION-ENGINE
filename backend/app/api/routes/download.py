@@ -40,3 +40,44 @@ async def download_master(
 
     url = await generate_presigned_url(session.output_file_key, expires_seconds=300)
     return RedirectResponse(url=url, status_code=302)
+
+
+# ── Multi-format transcode stubs (RAIN-E703) ──────────────────────────────────
+# These return structured errors instead of silent 500s.
+# Implementation pending: MP3 320, FLAC, AAC, OGG transcoding via ffmpeg.
+
+_TRANSCODE_FORMATS = {"mp3", "flac", "aac", "ogg"}
+
+
+@router.get("/{session_id}/download/{fmt}")
+async def download_master_format(
+    session_id: UUID,
+    fmt: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> None:
+    if fmt not in _TRANSCODE_FORMATS:
+        raise HTTPException(422, detail={
+            "code": "RAIN-E703",
+            "message": f"Unknown format '{fmt}'. Supported: {', '.join(sorted(_TRANSCODE_FORMATS))}",
+        })
+    raise HTTPException(501, detail={
+        "code": "RAIN-E703",
+        "message": f"Multi-format export ({fmt.upper()}) is not yet implemented. Download WAV and convert locally.",
+        "feature": "multi_format_export",
+        "status": "planned",
+    })
+
+
+# ── DDP 2.0 export stub (RAIN-E604) ──────────────────────────────────────────
+
+@router.get("/{session_id}/ddp")
+async def download_ddp(
+    session_id: UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> None:
+    raise HTTPException(501, detail={
+        "code": "RAIN-E604",
+        "message": "DDP 2.0 export is not yet implemented. Use WAV export for CD manufacturing.",
+        "feature": "ddp_export",
+        "status": "planned",
+    })
