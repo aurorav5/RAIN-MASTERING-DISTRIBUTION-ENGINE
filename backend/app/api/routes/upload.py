@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
 import hashlib
 import structlog
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.rate_limit import limiter, dynamic_limit
 from app.api.dependencies import get_current_user, CurrentUser
@@ -87,8 +88,14 @@ async def create_session(
         target_platform=params.target_platform,
         simple_mode=params.simple_mode,
         genre=params.genre,
-        wasm_binary_hash="pending",
+        wasm_binary_hash=params.wasm_binary_hash or "pending",
     )
+    # R6 WASM binary integrity — verify hash if gate is set
+    if settings.RAIN_EXPECTED_WASM_HASH and session.wasm_binary_hash not in ("pending", settings.RAIN_EXPECTED_WASM_HASH):
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "RAIN-E304", "message": "WASM binary hash mismatch — render blocked"}
+        )
     db.add(session)
     await db.commit()
     await db.refresh(session)

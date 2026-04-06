@@ -105,9 +105,11 @@ async def _render_session_async(
             await db.commit()
 
             from app.tasks.certification import sign_rain_cert
+            from app.tasks.provenance import stamp_output
             from app.tasks.aie import update_aie_profile
             from app.tasks.content_scan import scan_content
             sign_rain_cert.delay(session_id, user_id)
+            stamp_output.delay(session_id, user_id)  # C2PA + AudioSeal — EU AI Act Art. 50
             update_aie_profile.delay(session_id, user_id, mel.tolist(), params, genre)
             scan_content.delay(session_id, user_id)
 
