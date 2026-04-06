@@ -53,10 +53,19 @@ function defaultParams(): ProcessingParams {
 
     // SAIL (Stem-Aware Intelligent Limiting)
     sail_enabled: false,
-    sail_stem_gains: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // float[6] NOT float[5]
+    sail_stem_gains: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // float[12] SAIL v2
 
     // Vinyl mode
     vinyl_mode: false,
+
+    // Macro controls (defaults — overridden per genre below)
+    macro_brighten: 5.0,
+    macro_glue: 5.0,
+    macro_width: 5.0,
+    macro_punch: 5.0,
+    macro_warmth: 5.0,
+    macro_space: 5.0,
+    macro_repair: 0.0,
   }
 }
 
@@ -193,7 +202,7 @@ const PLATFORM_TARGETS: Record<string, { target_lufs: number; true_peak_ceiling:
 }
 
 /** Fallback platform target (spotify) — matches backend get_platform_target fallback. */
-const DEFAULT_PLATFORM = PLATFORM_TARGETS.spotify
+const DEFAULT_PLATFORM = PLATFORM_TARGETS.spotify ?? { target_lufs: -14.0, true_peak_ceiling: -1.0 }
 
 /**
  * Generate a deterministic ProcessingParams from (genre, platform).

@@ -1,3 +1,14 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Web Speech API type shims (not all browsers ship these)
+declare global {
+  interface Window {
+    SpeechRecognition: any
+    webkitSpeechRecognition: any
+  }
+}
+type SpeechRecognition = any
+type SpeechRecognitionEvent = any
+
 /**
  * RAIN Voice Command System
  *
@@ -70,7 +81,7 @@ function parseCommand(transcript: string): VoiceIntent {
     // "set brighten to 7"
     const setMatch = t.match(new RegExp(`set\\s+${macro}\\s+(?:to\\s+)?(\\d+(?:\\.\\d+)?)`, 'i'))
     if (setMatch) {
-      return { type: 'macro', name: macro, action: 'set', value: parseFloat(setMatch[1]) }
+      return { type: 'macro', name: macro, action: 'set', value: parseFloat(setMatch[1] ?? '5') }
     }
 
     // "more brighten" / "brighten up" / "increase brighten"
@@ -149,7 +160,7 @@ export function useVoiceCommands(options: UseVoiceCommandsOptions): VoiceCommand
       onTranscriptRef.current?.(transcript, result.isFinal)
     }
 
-    recognition.onerror = (event) => {
+    recognition.onerror = (event: any) => {
       // "no-speech" and "aborted" are normal — don't treat as errors
       if (event.error === 'no-speech' || event.error === 'aborted') return
       setState(s => ({ ...s, error: event.error }))
