@@ -23,6 +23,7 @@
     "framer-motion": "^11.18.2",
     "lucide-react": "^0.447.0",
     "onnxruntime-web": "^1.24.3",
+    "posthog-js": "^1.364.7",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^6.26.2",
