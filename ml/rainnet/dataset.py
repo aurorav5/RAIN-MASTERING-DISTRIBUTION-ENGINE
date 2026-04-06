@@ -136,6 +136,6 @@ class RainNetDataset(Dataset):
             "artist_vec": torch.zeros(64),
             "genre_id": torch.tensor(sample.get("genre_label", 0), dtype=torch.long),
             "platform_id": torch.tensor(sample.get("platform_label", 0), dtype=torch.long),
-            "simple_mode": torch.tensor([[1.0]]),
+            "simple_mode": torch.tensor([1.0]),  # shape (1,) — batched to (B, 1)
             "target_params": pv,
         }
