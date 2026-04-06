@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:15-alpine
+        image: postgres:18-alpine
         env:
           POSTGRES_USER: rain_app
           POSTGRES_PASSWORD: testpassword
@@ -44,7 +44,7 @@ jobs:
         env:
           RAIN_ENV: development
           DATABASE_URL: postgresql+asyncpg://rain_app:testpassword@localhost:5432/rain_test
-          REDIS_URL: redis://localhost:6379/0
+          VALKEY_URL: redis://localhost:6379/0
           JWT_SECRET_KEY: test_secret
           S3_ACCESS_KEY: test
           S3_SECRET_KEY: test

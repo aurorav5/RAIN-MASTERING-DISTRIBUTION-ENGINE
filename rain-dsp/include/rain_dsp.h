@@ -78,7 +78,7 @@ struct ProcessingParams {
     // Saturation
     bool analog_saturation  = false;
     double saturation_drive = 0.0;               // 0.0 - 1.0
-    std::string saturation_mode = "tape";        // "tape" | "transformer" | "tube"
+    std::string saturation_mode = "tape";        // "tape" | "transistor" | "tube"
 
     // M/S
     bool ms_enabled       = false;
@@ -93,7 +93,7 @@ struct ProcessingParams {
 
     // SAIL
     bool sail_enabled = false;
-    std::array<double, 6> sail_stem_gains = {0,0,0,0,0,0};
+    std::array<double, 12> sail_stem_gains = {0,0,0,0,0,0,0,0,0,0,0,0};  // 12-stem SAIL v2
 };
 
 // LUFS measurement result (ITU-R BS.1770-4)

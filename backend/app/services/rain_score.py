@@ -18,6 +18,26 @@ PLATFORM_TARGETS: dict[str, dict] = {
 }
 
 
+def _compute_measurements_sync(audio_data: bytes) -> tuple[float, float, float]:
+    """Synchronous measurement — runs in thread pool off the event loop."""
+    import soundfile as sf
+    import pyloudnorm as pyln
+    import io
+
+    audio_arr, sr = sf.read(io.BytesIO(audio_data), dtype="float64", always_2d=True)
+    meter = pyln.Meter(sr)
+    lufs = float(meter.integrated_loudness(audio_arr))
+    tp_lin = float(np.max(np.abs(audio_arr)))
+    tp = 20.0 * np.log10(tp_lin) if tp_lin > 0 else -120.0
+
+    if audio_arr.shape[1] >= 2:
+        corr = float(np.corrcoef(audio_arr[:, 0], audio_arr[:, 1])[0, 1])
+        stereo_score = float(np.clip((1.0 - abs(corr)) * 10.0 + 5.0, 0.0, 10.0))
+    else:
+        stereo_score = 5.0
+    return lufs, tp, stereo_score
+
+
 async def compute_rain_score(
     audio_data: bytes,
     primary_platform: str,
@@ -25,22 +45,13 @@ async def compute_rain_score(
 ) -> dict:
     """
     Compute RAIN Score: 0-100 composite quality metric.
-    Weights: Loudness(40) + TruePeak(20) + Codec(20) + Spectral(10) + Stereo(10).
-    Returns per-platform sub-scores and overall mean.
+    Heavy numpy/soundfile work offloaded to thread pool (P1-3.7 fix).
     """
-    from app.services.audio_analysis import measure_lufs_true_peak
-    import soundfile as sf
-    import io
+    import asyncio
 
-    lufs, tp = await measure_lufs_true_peak(audio_data)
-
-    # Compute stereo correlation for stereo field score
-    audio_arr, sr = sf.read(io.BytesIO(audio_data), dtype="float64", always_2d=True)
-    if audio_arr.shape[1] >= 2:
-        corr = float(np.corrcoef(audio_arr[:, 0], audio_arr[:, 1])[0, 1])
-        stereo_score = float(np.clip((1.0 - abs(corr)) * 10.0 + 5.0, 0.0, 10.0))
-    else:
-        stereo_score = 5.0  # mono: neutral
+    lufs, tp, stereo_score = await asyncio.to_thread(
+        _compute_measurements_sync, audio_data
+    )
 
     scores: dict[str, int] = {}
     for platform, target in PLATFORM_TARGETS.items():

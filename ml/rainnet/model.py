@@ -3,6 +3,10 @@ import torch.nn as nn
 from typing import Optional
 
 
+# Saturation mode encoding: float index to string label
+_SATURATION_MODES: list[str] = ["tape", "tube", "transistor"]
+
+
 class MelSpecEncoder(nn.Module):
     def __init__(self, output_dim: int = 256) -> None:
         super().__init__()
@@ -22,7 +26,33 @@ class MelSpecEncoder(nn.Module):
 
 
 class RainNetV2(nn.Module):
-    N_PARAMS: int = 32
+    """
+    RainNet v2 -- predicts 46 raw parameters that decode into the canonical
+    ProcessingParams schema (CLAUDE.md).
+
+    Raw output layout (46 neurons):
+        [0]       target_lufs                  -- sigmoid -> [-24.0, -8.0]
+        [1]       true_peak_ceiling            -- sigmoid -> [-6.0, 0.0]
+        [2-4]     mb_threshold_low/mid/high    -- sigmoid -> [-40.0, 0.0]
+        [5-7]     mb_ratio_low/mid/high        -- softplus+1 -> [1.0, 20.0]
+        [8-10]    mb_attack_low/mid/high       -- softplus -> ms
+        [11-13]   mb_release_low/mid/high      -- softplus*10 -> ms
+        [14-21]   eq_gains[0..7]               -- tanh*12 -> [-12.0, +12.0] dB
+        [22]      analog_saturation            -- sigmoid -> bool threshold 0.5
+        [23]      saturation_drive             -- sigmoid -> [0.0, 1.0]
+        [24-26]   saturation_mode logits       -- argmax -> tape/tube/transistor
+        [27]      ms_enabled                   -- sigmoid -> bool threshold 0.5
+        [28]      mid_gain                     -- tanh*6 -> [-6.0, +6.0] dB
+        [29]      side_gain                    -- tanh*6 -> [-6.0, +6.0] dB
+        [30]      stereo_width                 -- sigmoid*2 -> [0.0, 2.0]
+        [31]      sail_enabled                 -- sigmoid -> bool threshold 0.5
+        [32-37]   sail_stem_gains[0..5]        -- tanh*3 -> [-3.0, +3.0] dB
+        [38]      vinyl_mode                   -- sigmoid -> bool threshold 0.5
+        [39-45]   macro controls: brighten, glue, width, punch, warmth, space, repair
+                                               -- sigmoid*10 -> [0.0, 10.0]
+    """
+
+    N_PARAMS: int = 46
 
     def __init__(
         self,
@@ -74,33 +104,112 @@ class RainNetV2(nn.Module):
         return self.decoder(cls_out)
 
     def decode_params(self, raw: torch.Tensor) -> dict:
-        """Convert raw model output to ProcessingParams-compatible dict."""
+        """
+        Convert raw model output [46] to a complete ProcessingParams dict.
+        Every field from the canonical schema is present -- no optional keys.
+        """
         p = raw.squeeze(0)
+
+        # --- Loudness target ---
+        # sigmoid -> [0,1] -> scale to [-24, -8]
+        target_lufs = float(torch.sigmoid(p[0]) * 16.0 - 24.0)
+        # sigmoid -> [0,1] -> scale to [-6, 0]
+        true_peak_ceiling = float(torch.sigmoid(p[1]) * 6.0 - 6.0)
+
+        # --- Multiband dynamics (12 params) ---
+        mb_threshold_low = float(torch.sigmoid(p[2]) * -40.0)
+        mb_threshold_mid = float(torch.sigmoid(p[3]) * -40.0)
+        mb_threshold_high = float(torch.sigmoid(p[4]) * -40.0)
+
+        mb_ratio_low = float(torch.clamp(nn.functional.softplus(p[5]) + 1.0, min=1.0, max=20.0))
+        mb_ratio_mid = float(torch.clamp(nn.functional.softplus(p[6]) + 1.0, min=1.0, max=20.0))
+        mb_ratio_high = float(torch.clamp(nn.functional.softplus(p[7]) + 1.0, min=1.0, max=20.0))
+
+        mb_attack_low = float(torch.clamp(nn.functional.softplus(p[8]), min=0.1, max=100.0))
+        mb_attack_mid = float(torch.clamp(nn.functional.softplus(p[9]), min=0.1, max=100.0))
+        mb_attack_high = float(torch.clamp(nn.functional.softplus(p[10]), min=0.1, max=100.0))
+
+        mb_release_low = float(torch.clamp(nn.functional.softplus(p[11]) * 10.0, min=1.0, max=500.0))
+        mb_release_mid = float(torch.clamp(nn.functional.softplus(p[12]) * 10.0, min=1.0, max=500.0))
+        mb_release_high = float(torch.clamp(nn.functional.softplus(p[13]) * 10.0, min=1.0, max=500.0))
+
+        # --- EQ gains (8 bands) ---
+        eq_gains = [float(torch.tanh(p[14 + i]) * 12.0) for i in range(8)]
+
+        # --- Analog saturation (3 params) ---
+        analog_saturation = bool(torch.sigmoid(p[22]).item() > 0.5)
+        saturation_drive = float(torch.sigmoid(p[23]))
+        # 3-class softmax over [24..26] -> argmax selects mode
+        sat_logits = p[24:27]
+        saturation_mode = _SATURATION_MODES[int(torch.argmax(sat_logits).item())]
+
+        # --- Mid/Side processing (4 params) ---
+        ms_enabled = bool(torch.sigmoid(p[27]).item() > 0.5)
+        mid_gain = float(torch.tanh(p[28]) * 6.0)
+        side_gain = float(torch.tanh(p[29]) * 6.0)
+        stereo_width = float(torch.sigmoid(p[30]) * 2.0)
+
+        # --- SAIL (7 params) ---
+        sail_enabled = bool(torch.sigmoid(p[31]).item() > 0.5)
+        # Model predicts 6 primary stem gains at [32-37]; padded to 12 for SAIL v2.
+        # Slots 6-11 populated from separation output when available.
+        sail_stem_gains = [float(torch.tanh(p[32 + i]) * 3.0) for i in range(6)] + [0.0] * 6
+
+        # --- Vinyl mode (1 param) ---
+        vinyl_mode = bool(torch.sigmoid(p[38]).item() > 0.5)
+
+        # Override true_peak_ceiling for vinyl safety
+        if vinyl_mode:
+            true_peak_ceiling = min(true_peak_ceiling, -3.0)
+
+        # --- Macro controls (7 params, indices 39-45) ---
+        macro_brighten = float(torch.sigmoid(p[39]) * 10.0)
+        macro_glue = float(torch.sigmoid(p[40]) * 10.0)
+        macro_width = float(torch.sigmoid(p[41]) * 10.0)
+        macro_punch = float(torch.sigmoid(p[42]) * 10.0)
+        macro_warmth = float(torch.sigmoid(p[43]) * 10.0)
+        macro_space = float(torch.sigmoid(p[44]) * 10.0)
+        macro_repair = float(torch.sigmoid(p[45]) * 10.0)
+
         return {
-            "mb_threshold_low":  float(torch.sigmoid(p[0]) * -40),
-            "mb_threshold_mid":  float(torch.sigmoid(p[1]) * -40),
-            "mb_threshold_high": float(torch.sigmoid(p[2]) * -40),
-            "mb_ratio_low":      float(nn.functional.softplus(p[3]) + 1.0),
-            "mb_ratio_mid":      float(nn.functional.softplus(p[4]) + 1.0),
-            "mb_ratio_high":     float(nn.functional.softplus(p[5]) + 1.0),
-            "mb_attack_low":     float(nn.functional.softplus(p[6])),
-            "mb_attack_mid":     float(nn.functional.softplus(p[7])),
-            "mb_attack_high":    float(nn.functional.softplus(p[8])),
-            "mb_release_low":    float(nn.functional.softplus(p[9]) * 10),
-            "mb_release_mid":    float(nn.functional.softplus(p[10]) * 10),
-            "mb_release_high":   float(nn.functional.softplus(p[11]) * 10),
-            "eq_gains":          [float(torch.tanh(p[12 + i]) * 12) for i in range(8)],
-            "analog_saturation": bool(torch.sigmoid(p[20]) > 0.5),
-            "saturation_drive":  float(torch.sigmoid(p[21])),
-            "saturation_mode":   "tape",
-            "ms_enabled":        bool(torch.sigmoid(p[22]) > 0.5),
-            "mid_gain":          float(torch.tanh(p[23]) * 6),
-            "side_gain":         float(torch.tanh(p[24]) * 6),
-            "stereo_width":      float(torch.sigmoid(p[25]) * 2),
-            "sail_enabled":      bool(torch.sigmoid(p[26]) > 0.5),
-            "sail_stem_gains":   [float(torch.tanh(p[27 + i]) * 3) for i in range(5)] + [0.0],
-            # target_lufs and true_peak_ceiling are set by platform, not predicted
-            "target_lufs":       -14.0,
-            "true_peak_ceiling": -1.0,
-            "vinyl_mode":        False,
+            # Loudness target
+            "target_lufs": target_lufs,
+            "true_peak_ceiling": true_peak_ceiling,
+            # Multiband dynamics
+            "mb_threshold_low": mb_threshold_low,
+            "mb_threshold_mid": mb_threshold_mid,
+            "mb_threshold_high": mb_threshold_high,
+            "mb_ratio_low": mb_ratio_low,
+            "mb_ratio_mid": mb_ratio_mid,
+            "mb_ratio_high": mb_ratio_high,
+            "mb_attack_low": mb_attack_low,
+            "mb_attack_mid": mb_attack_mid,
+            "mb_attack_high": mb_attack_high,
+            "mb_release_low": mb_release_low,
+            "mb_release_mid": mb_release_mid,
+            "mb_release_high": mb_release_high,
+            # EQ
+            "eq_gains": eq_gains,
+            # Analog saturation
+            "analog_saturation": analog_saturation,
+            "saturation_drive": saturation_drive,
+            "saturation_mode": saturation_mode,
+            # Mid/Side
+            "ms_enabled": ms_enabled,
+            "mid_gain": mid_gain,
+            "side_gain": side_gain,
+            "stereo_width": stereo_width,
+            # SAIL
+            "sail_enabled": sail_enabled,
+            "sail_stem_gains": sail_stem_gains,
+            # Vinyl
+            "vinyl_mode": vinyl_mode,
+            # Macro controls
+            "macro_brighten": macro_brighten,
+            "macro_glue": macro_glue,
+            "macro_width": macro_width,
+            "macro_punch": macro_punch,
+            "macro_warmth": macro_warmth,
+            "macro_space": macro_space,
+            "macro_repair": macro_repair,
         }

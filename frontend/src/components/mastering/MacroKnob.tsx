@@ -8,6 +8,10 @@ interface MacroKnobProps {
   onChange: (value: number) => void
   color?: string
   subParams?: string[]
+  /** Knob diameter in px. Defaults to 88. */
+  size?: number
+  /** Whether to render the label and sub-params below the knob. Defaults to true. */
+  showLabel?: boolean
 }
 
 export function MacroKnob({
@@ -18,15 +22,19 @@ export function MacroKnob({
   onChange,
   color = '#D946EF',
   subParams = [],
+  size = 88,
+  showLabel = true,
 }: MacroKnobProps) {
   const [isDragging, setIsDragging] = useState(false)
   const knobRef = useRef<HTMLDivElement>(null)
   const startY = useRef(0)
   const startValue = useRef(0)
 
+  const half = size / 2
+  const radius = half - 2 // leave 2px padding for stroke
   const normalized = (value - min) / (max - min)
   const angle = -135 + normalized * 270 // -135 to +135 degrees
-  const circumference = 2 * Math.PI * 42
+  const circumference = 2 * Math.PI * radius
   const dashOffset = circumference - normalized * circumference * 0.75 // 270 deg arc
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -57,31 +65,31 @@ export function MacroKnob({
         ref={knobRef}
         className="relative cursor-pointer select-none"
         onMouseDown={handleMouseDown}
-        style={{ width: 88, height: 88 }}
+        style={{ width: size, height: size }}
       >
         {/* SVG Ring Track + Value Arc */}
-        <svg viewBox="0 0 88 88" className="absolute inset-0">
+        <svg viewBox={`0 0 ${size} ${size}`} className="absolute inset-0">
           {/* Track */}
           <circle
-            cx="44" cy="44" r="42"
+            cx={half} cy={half} r={radius}
             fill="none"
             stroke="#2A2545"
             strokeWidth="3"
             strokeDasharray={`${circumference * 0.75} ${circumference * 0.25}`}
             strokeDashoffset={circumference * 0.125}
             strokeLinecap="round"
-            transform="rotate(135 44 44)"
+            transform={`rotate(135 ${half} ${half})`}
           />
           {/* Value arc */}
           <circle
-            cx="44" cy="44" r="42"
+            cx={half} cy={half} r={radius}
             fill="none"
             stroke={`url(#knob-grad-${label})`}
             strokeWidth="3"
             strokeDasharray={`${normalized * circumference * 0.75} ${circumference}`}
             strokeDashoffset={0}
             strokeLinecap="round"
-            transform="rotate(135 44 44)"
+            transform={`rotate(135 ${half} ${half})`}
             style={{ filter: `drop-shadow(0 0 4px ${color}60)` }}
           />
           <defs>
@@ -121,7 +129,7 @@ export function MacroKnob({
             className="absolute top-[6px] left-1/2 w-[3px] h-[10px] rounded-full"
             style={{
               transform: `translateX(-50%) rotate(${angle}deg)`,
-              transformOrigin: `50% ${(88 - 16) / 2 - 6}px`,
+              transformOrigin: `50% ${(size - 16) / 2 - 6}px`,
               background: `linear-gradient(to bottom, ${color}, ${color}88)`,
               boxShadow: `0 0 6px ${color}80`,
             }}
@@ -130,12 +138,14 @@ export function MacroKnob({
       </div>
 
       {/* Label */}
-      <span className="text-[10px] font-mono font-bold tracking-widest text-rain-text uppercase">
-        {label}
-      </span>
+      {showLabel && (
+        <span className="text-[10px] font-mono font-bold tracking-widest text-rain-text uppercase">
+          {label}
+        </span>
+      )}
 
       {/* Sub-parameters */}
-      {subParams.length > 0 && (
+      {showLabel && subParams.length > 0 && (
         <div className="text-[8px] font-mono text-rain-dim space-y-0.5 text-center">
           {subParams.map((p) => (
             <div key={p}>- {p}</div>

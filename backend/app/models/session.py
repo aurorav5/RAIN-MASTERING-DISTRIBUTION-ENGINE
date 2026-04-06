@@ -1,4 +1,4 @@
-from sqlalchemy import String, Boolean, DateTime, Integer, ForeignKey, Text
+from sqlalchemy import String, Boolean, DateTime, Integer, ForeignKey, Index, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB, NUMERIC
 from sqlalchemy.sql import func
 import uuid
@@ -10,6 +10,10 @@ from datetime import datetime
 
 class Session(Base):
     __tablename__ = "sessions"
+    __table_args__ = (
+        Index("ix_sessions_user_status", "user_id", "status"),
+        Index("ix_sessions_user_created", "user_id", "created_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -39,3 +43,14 @@ class Session(Base):
     error_detail: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Idempotency gates (migration 0004)
+    provenance_stamped_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    aie_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    stems_separated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    stamped_output_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    stamped_output_hash: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    c2pa_manifest_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    audioseal_message_hex: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    chromaprint_fingerprint: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    measured_bpm: Mapped[Optional[float]] = mapped_column(NUMERIC(6, 2), nullable=True)
+    measured_bpm_raw: Mapped[Optional[float]] = mapped_column(NUMERIC(6, 2), nullable=True)

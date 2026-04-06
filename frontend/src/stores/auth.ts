@@ -1,39 +1,64 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { Tier, TIER_RANK } from '@/types/tiers'
 
-export type Tier = 'free' | 'spark' | 'creator' | 'artist' | 'studio_pro' | 'enterprise'
+// Re-export for backward compat with existing imports (`import { type Tier } from '@/stores/auth'`)
+export { Tier }
+export type { Tier as TierType } from '@/types/tiers'
 
-const TIER_RANK: Record<Tier, number> = {
-  free: 0, spark: 1, creator: 2, artist: 3, studio_pro: 4, enterprise: 5,
-}
+// Dev auto-auth bypass. Opt-in via VITE_DEV_AUTO_AUTH=true in .env.
+// By default the real login flow runs in both dev and prod so credentials,
+// tier gates, and refresh-cookie flow are tested against the real backend.
+const DEV_AUTO_AUTH =
+  import.meta.env.DEV && import.meta.env['VITE_DEV_AUTO_AUTH'] === 'true'
+const DEFAULT_TIER: Tier = DEV_AUTO_AUTH ? Tier.ENTERPRISE : Tier.FREE
+const DEFAULT_AUTH = DEV_AUTO_AUTH
 
 interface AuthState {
   accessToken: string | null
+  /** @deprecated refresh token now lives in httpOnly cookie — field kept for legacy clients */
   refreshToken: string | null
   tier: Tier
   userId: string | null
   isAuthenticated: boolean
-  setTokens: (access: string, refresh: string, tier: Tier, userId: string) => void
+  setTokens: (access: string, refresh: string, tier: Tier | string, userId: string) => void
+  setAccessToken: (access: string, tier: Tier | string) => void
   clearAuth: () => void
-  tierGte: (minimum: Tier) => boolean
+  tierGte: (minimum: Tier | string) => boolean
+}
+
+function coerceTier(value: Tier | string): Tier {
+  return (Object.values(Tier) as string[]).includes(value) ? (value as Tier) : Tier.FREE
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      accessToken: null,
-      refreshToken: null,
-      tier: 'free',
-      userId: null,
-      isAuthenticated: false,
+      accessToken: DEV_AUTO_AUTH ? 'dev-token' : null,
+      refreshToken: DEV_AUTO_AUTH ? 'dev-refresh' : null,
+      tier: DEFAULT_TIER,
+      userId: DEV_AUTO_AUTH ? 'dev-user-phil' : null,
+      isAuthenticated: DEFAULT_AUTH,
       setTokens: (access, refresh, tier, userId) =>
-        set({ accessToken: access, refreshToken: refresh, tier, userId, isAuthenticated: true }),
+        set({
+          accessToken: access,
+          refreshToken: refresh,
+          tier: coerceTier(tier),
+          userId,
+          isAuthenticated: true,
+        }),
+      setAccessToken: (access, tier) =>
+        set({ accessToken: access, tier: coerceTier(tier), isAuthenticated: true }),
       clearAuth: () =>
-        set({ accessToken: null, refreshToken: null, tier: 'free', userId: null, isAuthenticated: false }),
-      tierGte: (minimum) => TIER_RANK[get().tier] >= TIER_RANK[minimum],
+        set({ accessToken: null, refreshToken: null, tier: Tier.FREE, userId: null, isAuthenticated: false }),
+      tierGte: (minimum) => {
+        const t = TIER_RANK[get().tier]
+        const m = TIER_RANK[coerceTier(minimum)]
+        return t >= m
+      },
     }),
     {
-      name: 'rain-auth',
+      name: 'rain-auth-v2',
       partialize: (s) => ({
         accessToken: s.accessToken,
         refreshToken: s.refreshToken,

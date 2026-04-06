@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from fastapi import HTTPException
 from datetime import datetime, timezone, timedelta
 from uuid import UUID
@@ -50,6 +50,7 @@ async def check_and_increment_downloads(user_id: UUID, tier: str, db: AsyncSessi
 
 
 async def _get_or_create_quota(user_id: UUID, db: AsyncSession) -> UsageQuota:
+    await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(user_id)})
     now = datetime.now(timezone.utc)
     start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     result = await db.execute(

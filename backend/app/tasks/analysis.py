@@ -13,14 +13,13 @@ def analyze_session(self, session_id: str, user_id: str) -> None:
 async def _analyze_session_async(session_id: str, user_id: str) -> None:
     from app.core.database import AsyncSessionLocal
     from app.models.session import Session as MasteringSession
-    from app.services.storage import get_s3_client
+    from app.services.storage import download_from_s3
     from app.services.audio_analysis import extract_mel_spectrogram, measure_lufs_true_peak
-    from app.core.config import settings
-    from sqlalchemy import select, update
+    from sqlalchemy import select, update, text
     from uuid import UUID
 
     async with AsyncSessionLocal() as db:
-        await db.execute(f"SELECT set_app_user_id('{user_id}'::uuid)")
+        await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(user_id)})
 
         result = await db.execute(
             select(MasteringSession).where(
@@ -40,9 +39,7 @@ async def _analyze_session_async(session_id: str, user_id: str) -> None:
 
         try:
             if session.input_file_key:
-                s3 = get_s3_client()
-                obj = s3.get_object(Bucket=settings.S3_BUCKET, Key=session.input_file_key)
-                audio_data = obj["Body"].read()
+                audio_data = await download_from_s3(session.input_file_key)
             else:
                 # Free tier: audio not persisted
                 await db.execute(
@@ -54,8 +51,17 @@ async def _analyze_session_async(session_id: str, user_id: str) -> None:
                 await db.commit()
                 return
 
+            import time as _time
+            t0 = _time.monotonic()
             lufs, tp = await measure_lufs_true_peak(audio_data)
+            lufs_ms = int((_time.monotonic() - t0) * 1000)
+            logger.info("analysis_lufs_measured", session_id=session_id, user_id=user_id, stage="analysis", duration_ms=lufs_ms, lufs=round(lufs, 2), true_peak=round(tp, 2))
+
+            t0 = _time.monotonic()
             mel, duration, _ = extract_mel_spectrogram(audio_data)
+            mel_ms = int((_time.monotonic() - t0) * 1000)
+            logger.info("analysis_mel_extracted", session_id=session_id, user_id=user_id, stage="analysis", duration_ms=mel_ms)
+
             genre = _classify_genre(mel) or session.genre
 
             await db.execute(
@@ -84,5 +90,19 @@ async def _analyze_session_async(session_id: str, user_id: str) -> None:
             await db.commit()
 
 def _classify_genre(mel) -> str:
-    """Stub. Returns 'default' until GenreClassifier ONNX is trained."""
+    """Genre classification fallback.
+
+    Returns 'default' until GenreClassifier ONNX is trained and deployed.
+    Logs RAIN-E401 so the failure is observable in monitoring — not silent.
+    """
+    # TODO(RAIN-ML): Wire ml/genre_classifier/model.py ONNX checkpoint here.
+    # Once available: load checkpoint, run inference on mel, return top-1 genre label.
+    import structlog
+    _logger = structlog.get_logger()
+    _logger.info(
+        "genre_classifier_fallback",
+        error_code="RAIN-E401",
+        stage="analysis",
+        note="GenreClassifier not deployed — returning 'default'. Train and export ONNX to enable.",
+    )
     return "default"

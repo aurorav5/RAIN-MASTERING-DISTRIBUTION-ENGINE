@@ -84,11 +84,11 @@ These are immutable. Never deviate without explicit written approval from Phil B
 | Render Engine | RainDSP (C++20/WASM via Emscripten 3.1.50+) | Local only |
 | ML Inference | ONNX Runtime Web (WASM) | Local for base/tiny/nano |
 | Backend API | FastAPI 0.109+ (Python 3.12+) | |
-| Database | PostgreSQL 15+ with RLS | |
-| Cache/Queue | Redis 7+ | |
+| Database | PostgreSQL 18+ with RLS (UUIDv7) | |
+| Cache/Queue | Valkey 9.0 (Linux Foundation Redis fork, BSD) | |
 | Object Storage | S3-compatible (MinIO in dev) | |
 | ML Training | PyTorch 2.x | |
-| Source Separation | Demucs v4 htdemucs_6s (multi-pass, 12-stem) | Cloud GPU |
+| Source Separation | BS-RoFormer SW cascaded 4-pass pipeline (12-stem) | Cloud GPU |
 | AI Assistant | Anthropic API (claude-opus-4-6) | |
 | Billing | Stripe | |
 | Desktop App | Tauri 2.0 (Rust + WebView) | Studio Pro+ |
@@ -234,21 +234,36 @@ ProcessingParams {
   side_gain:           float    // dB. Default: 0.0. Range: [-6.0, +6.0]
   stereo_width:        float    // 0.0–2.0. Default: 1.0 (no change)
 
-  // SAIL (Stem-Aware Intelligent Limiting)
-  sail_enabled:        bool     // Default: false
-  sail_stem_gains:     float[6] // Per-stem gain adjustments. Default: [0.0] * 6
+  // SAIL v2 (Stem-Aware Intelligent Limiting — 12-stem)
+  sail_enabled:        bool      // Default: false
+  sail_stem_gains:     float[12] // Per-stem gain adjustments (12-stem era). Default: [0.0] * 12
 
   // Vinyl mode
-  vinyl_mode:          bool     // Default: false. Enables RIAA + SAIL vinyl chain
+  vinyl_mode:          bool      // Default: false. Enables RIAA + SAIL vinyl chain
+
+  // 7 Macro controls (RainNet v2 indices 39-45, sigmoid×10 → [0.0, 10.0])
+  macro_brighten:      float     // 0.0-10.0. High-frequency presence, air, sparkle.
+  macro_glue:          float     // 0.0-10.0. Bus compression, cohesion.
+  macro_width:         float     // 0.0-10.0. Stereo width, spatial spread.
+  macro_punch:         float     // 0.0-10.0. Transient emphasis, impact.
+  macro_warmth:        float     // 0.0-10.0. Harmonic saturation, analog tone.
+  macro_space:         float     // 0.0-10.0. Spatial depth, immersive quality.
+  macro_repair:        float     // 0.0-10.0. Spectral repair intensity.
 }
+
+// Total: 46 scalar fields. RainNet v2 outputs all 46 in one forward pass.
+// Indices 0-38 = DSP parameters. Indices 39-45 = 7 macros.
 ```
 
 **Enforcement rules:**
 - The field name `eq_gains` is canonical. Never use `eq_bands`, `eq_curve`, or `eq`.
 - The field name `target_lufs` is canonical. Never use `lufs_target`, `loudness`, or `lufs`.
-- All fields must be present in every ProcessingParams dict. Use defaults for omitted values.
+- `sail_stem_gains` is `float[12]` (12-stem era). Never use `float[6]` (legacy 6-stem).
+- All 46 fields must be present in every ProcessingParams dict. Use defaults for omitted values.
 - The frontend TypeScript type `ProcessingParams` in `frontend/src/types/dsp.ts` must be a
   1:1 mapping of this schema. No optional fields. No extra fields.
+- The 7 macro fields (`macro_brighten` through `macro_repair`) are NOT optional. They are
+  always present, defaulting to the genre-appropriate heuristic value.
 
 ---
 
@@ -305,12 +320,15 @@ without explicit conditional logic defined in the spec:
 4. Parameter validation  → All fields present, all values in range, schema conforms
 5. DSP processing        → RainDSP (WASM or native) with validated ProcessingParams
 6. Output verification   → Measure output LUFS + true peak, verify ±0.5 LU of target
-7. Session completion    → Persist output (paid) or hold in memory (free)
-8. Background tasks      → Content scan, AIE update, RAIN-CERT (async, non-blocking)
+7. Provenance gate       → Create + sign RAIN-CERT synchronously, verify output hash (RAIN-E305/E306)
+8. Session completion    → Persist output + signed cert (paid) or hold in memory (free)
+9. Background tasks      → Content scan, AIE update, C2PA embed, AudioSeal watermark (async)
 ```
 
-Steps 1–7 are the critical path. Step 8 runs asynchronously after completion.
-Failure in step 8 must NEVER invalidate a completed session.
+Steps 1–8 are the critical path. Step 9 runs asynchronously after completion.
+Failure in step 9 must NEVER invalidate a completed session.
+The provenance gate (step 7) is SYNCHRONOUS and BLOCKING — hash mismatch or
+signature failure rejects the output with RAIN-E305/E306.
 
 ---
 
@@ -501,3 +519,38 @@ rain/
 └── tests/
     └── e2e/
 ```
+
+---
+
+## Upgrade Workflow — R∞N Aurora v2 → Production (2026-03-30)
+
+**Active branch:** `rain/full-upgrade`
+**Workflow doc:** `RAIN-WORKFLOW-CLAUDE-CODE.md` in Downloads (full plan)
+
+### Design Tools Configured
+- **Figma MCP** — added to `~/.claude/settings.json`. Run `/mcp` in Claude Code, select figma → Authenticate via OAuth. Requires Dev or Full seat on Professional plan.
+- **Canva MCP** — already active (MCP ID: `d9b01a75-c1c6-414d-9540-d3bec397741e`). Use for marketing assets — NOT UI components.
+- **v0.dev** — browser-based rapid shadcn/Tailwind component scaffolding.
+
+### Packages Added (2026-03-30)
+- `framer-motion` — UI micro-interactions, panel transitions
+- `wavefile` — proper WAV ArrayBuffer encoding (fixes Aurora v2 export bug)
+- `onnxruntime-web@latest` — ONNX Runtime with WebGPU EP
+- `@radix-ui/*` — primitives for shadcn/ui
+- `tw-animate-css` — replaces deprecated `tailwindcss-animate`
+
+### Phase Execution Order
+1. **Phase 1 (Weeks 1-2):** Fix render truncation, WAV export, DSP f64 precision
+2. **Phase 2 (Weeks 2-4):** React 19.2.1, Valkey 9.0, PostgreSQL 18.3, Tailwind 4.2.2, Vite 7, ONNX 1.24.4
+3. **Phase 3 (Weeks 3-6):** 7 UI screens — shadcn/ui + Framer Motion + Figma review loop
+4. **Phase 4 (Weeks 5-8):** ML — RainNet v2 (46-param), BS-RoFormer 12-stem cascade, genre classifier
+5. **Phase 5 (Weeks 7-10):** C2PA v2.2, DDEX ERN 4.3.2, LabelGrid, Quansic ISRC
+6. **Phase 6 (Weeks 9-12):** Stripe, waitlist, beta invites, PostHog feature flags, launch
+
+### Research Findings (2026-03-30)
+- ITO-Master: no ONNX export exists. Browser inference not feasible. RainNet WASM is correct.
+- ONNX RT WebGPU: use `/webgpu` import subpath; always dispose GPU tensors; WASM as default.
+- Tailwind 4: OKLCH for meter colors; `tailwindcss-animate` deprecated → `tw-animate-css`.
+- Framer Motion: `useMotionValue` for realtime meters (NOT useState) — zero React renders/frame.
+- DDEX ERN 3.x/4.0 removed March 2026 — ERN 4.3.2 only.
+- EU AI Act Article 50: August 2, 2026 — C2PA + DDEX AI disclosure required on all output.

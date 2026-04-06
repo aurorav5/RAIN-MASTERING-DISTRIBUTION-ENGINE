@@ -4,7 +4,7 @@ import torch.nn as nn
 
 
 class AnalogNet(nn.Module):
-    SATURATION_MODES: list[str] = ["tape", "transformer", "tube"]
+    SATURATION_MODES: list[str] = ["tape", "transistor", "tube"]
 
     def __init__(self) -> None:
         super().__init__()

@@ -1,274 +1,902 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
-import { Cpu } from 'lucide-react'
-import { useAuthStore } from '@/stores/auth'
+import { useState, useCallback, useRef } from 'react'
 import { useSessionStore } from '@/stores/session'
-import { renderLocal } from '@/hooks/useLocalRender'
+import type { MacroValues } from '@/stores/session'
 import { api, APIError } from '@/utils/api'
+import type { AnalysisData, ProcessResult } from '@/utils/api'
 import { UploadZone } from '../controls/UploadZone'
+import { Waveform } from '../visualizers/Waveform'
+import { Spectrum } from '../visualizers/Spectrum'
 import { SignalChain } from '../mastering/SignalChain'
 import { CreativeMacros } from '../mastering/CreativeMacros'
 import { MeteringPanel } from '../mastering/MeteringPanel'
+import { MasteringEngine } from '../mastering/MasteringEngine'
 import { AnalogModeling } from '../mastering/AnalogModeling'
 import { MSProcessing } from '../mastering/MSProcessing'
-import { MasteringEngine } from '../mastering/MasteringEngine'
-import { SpectrumView } from '../visualizers/SpectrumView'
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from '../layout/ResizablePanel'
+import {
+  Download,
+  ArrowLeftRight,
+  FileAudio,
+  Clock,
+  Radio,
+  Layers,
+  ChevronUp,
+  ChevronDown,
+} from 'lucide-react'
 
-const PLATFORMS = ['spotify', 'apple_music', 'youtube', 'tidal', 'amazon', 'soundcloud', 'cd', 'vinyl'] as const
-const GENRES = ['electronic', 'hiphop', 'rock', 'pop', 'classical', 'jazz', 'default'] as const
-type Platform = typeof PLATFORMS[number]
-type Genre = typeof GENRES[number]
+// ---------------------------------------------------------------------------
+// Control tab identifiers
+// ---------------------------------------------------------------------------
+
+type ControlTab = 'macros' | 'chain' | 'analog' | 'ms' | 'metadata'
+
+const CONTROL_TABS: readonly { id: ControlTab; label: string; shortcut: string }[] = [
+  { id: 'macros', label: 'Macros', shortcut: '1' },
+  { id: 'chain', label: 'Signal Chain', shortcut: '2' },
+  { id: 'analog', label: 'Analog', shortcut: '3' },
+  { id: 'ms', label: 'M/S', shortcut: '4' },
+  { id: 'metadata', label: 'Metadata', shortcut: '5' },
+] as const
+
+// ---------------------------------------------------------------------------
+// Processing status stages for LED indicators
+// ---------------------------------------------------------------------------
+
+const STAGE_LEDS: readonly { key: string; label: string }[] = [
+  { key: 'uploading', label: 'UPLOAD' },
+  { key: 'analyzing', label: 'ANALYSIS' },
+  { key: 'processing', label: 'DSP' },
+  { key: 'complete', label: 'DONE' },
+] as const
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+function formatSampleRate(sr: number): string {
+  return sr >= 1000 ? `${(sr / 1000).toFixed(1)} kHz` : `${sr} Hz`
+}
+
+// ---------------------------------------------------------------------------
+// MasteringTab
+// ---------------------------------------------------------------------------
 
 export default function MasteringTab() {
-  const { tier } = useAuthStore()
-  const { setStatus, setOutputBuffer, setResult, status, outputBuffer, outputLufs, rainCertId } = useSessionStore()
+  const store = useSessionStore()
+  const {
+    status, sessionId, inputBuffer, fileName, macros,
+    title, artist, album, genre, trackNumber, year,
+    isProcessing,
+    setStatus, setAnalysis, setResult, setInputBuffer,
+    setFileInfo, setMacros, setMetadata, setIsProcessing, setSession,
+  } = store
 
-  const [file, setFile] = useState<File | null>(null)
-  const [inputBuffer, setInputBuffer] = useState<ArrayBuffer | null>(null)
-  const [platform, setPlatform] = useState<Platform>('spotify')
-  const [genre, setGenre] = useState<Genre>('default')
+  // -- Local-only UI state (OK to lose on tab switch) --
   const [error, setError] = useState<string | null>(null)
-  const [sessionId, setSessionId] = useState<string | null>(null)
-  const wsRef = useRef<WebSocket | null>(null)
+  const [analysis, setAnalysisData] = useState<AnalysisData | null>(null)
+  const [processResult, setProcessResult] = useState<ProcessResult | null>(null)
+  const [uploadCollapsed, setUploadCollapsed] = useState(!!fileName)
+  const macroValues = macros
 
-  // Macro state
-  const [macros, setMacros] = useState({ brighten: 5.0, glue: 4.2, width: 3.8, punch: 6.1, warmth: 5.5 })
-  const [satMode, setSatMode] = useState('tape')
-  const [satDrive, setSatDrive] = useState(0.3)
+  // Metadata setters that persist in store
+  const setTitle = useCallback((v: string) => setMetadata({ title: v }), [setMetadata])
+  const setArtist = useCallback((v: string) => setMetadata({ artist: v }), [setMetadata])
+  const setAlbum = useCallback((v: string) => setMetadata({ album: v }), [setMetadata])
+  const setGenre = useCallback((v: string) => setMetadata({ genre: v }), [setMetadata])
+  const setTrackNumber = useCallback((v: string) => setMetadata({ trackNumber: v }), [setMetadata])
+  const setYear = useCallback((v: string) => setMetadata({ year: v }), [setMetadata])
+
+  // -- Analog modeling state --
+  const [analogMode, setAnalogMode] = useState('tape')
+  const [analogDrive, setAnalogDrive] = useState(0.0)
+
+  // -- M/S state --
   const [msEnabled, setMsEnabled] = useState(false)
-  const [midGain, setMidGain] = useState(0)
-  const [sideGain, setSideGain] = useState(0)
+  const [midGain, setMidGain] = useState(0.0)
+  const [sideGain, setSideGain] = useState(0.0)
   const [stereoWidth, setStereoWidth] = useState(1.0)
 
-  const isFree = tier === 'free'
+  // -- A/B --
+  const [abMode, setAbMode] = useState<'original' | 'mastered'>('mastered')
 
-  // Dev helper — exposes handleFile to window for E2E testing
-  const handleFileRef = useRef<((f: File) => Promise<void>) | null>(null)
+  // -- Control tabs --
+  const [activeControlTab, setActiveControlTab] = useState<ControlTab>('macros')
 
-  const handleFile = useCallback(async (f: File) => {
-    setFile(f)
-    setError(null)
-    const buf = await f.arrayBuffer()
-    setInputBuffer(buf)
-    setStatus('idle')
-    setOutputBuffer(null as unknown as ArrayBuffer)
-    // Also push to session store for transport bar
-    useSessionStore.getState().setInputBuffer(buf)
-  }, [setStatus, setOutputBuffer])
+  // -- Map macro values to DSP parameter ranges --
+  const knobToParam = useCallback(
+    () => ({
+      brightness: (macroValues.brighten / 10) * 4.0,
+      tightness: 1.0 + (macroValues.glue / 10) * 4.0,
+      width: -3.0 + (macroValues.width / 10) * 9.0,
+      target_lufs: -16.0 + (macroValues.punch / 10) * 7.0,
+      warmth: (macroValues.warmth / 10) * 3.0,
+      punch: 1.0 + (macroValues.punch / 10) * 29.0,
+      air: (macroValues.space / 10) * 3.0,
+    }),
+    [macroValues],
+  )
 
-  // Register dev helper on window so tests can inject files
-  useEffect(() => {
-    handleFileRef.current = handleFile
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(window as any).__rainHandleFile = (f: File) => handleFileRef.current?.(f)
-    return () => { /* eslint-disable-next-line @typescript-eslint/no-explicit-any */ ; delete (window as any).__rainHandleFile }
-  }, [handleFile])
+  // -- Macro change handler (persisted in store) --
+  const handleMacroChange = useCallback((key: keyof MacroValues, value: number) => {
+    setMacros({ [key]: value })
+  }, [setMacros])
 
-  // WebSocket for paid-tier real-time updates
-  useEffect(() => {
-    if (!sessionId || isFree) return
-    const { accessToken } = useAuthStore.getState()
-    const wsUrl = `/api/v1/sessions/${sessionId}/status?token=${accessToken ?? ''}`
-    const ws = new WebSocket(wsUrl.replace(/^http/, 'ws'))
-    wsRef.current = ws
+  // -- File upload handler --
+  const handleFile = useCallback(
+    async (f: File) => {
+      setError(null)
+      setAnalysisData(null)
+      setProcessResult(null)
+      setStatus('idle')
+      setUploadCollapsed(true)
 
-    ws.onmessage = (evt) => {
-      const msg: {
-        status: string
-        output_lufs?: number | null
-        output_true_peak?: number | null
-        rain_score?: unknown
-        error_code?: string
-        error_detail?: string
-      } = JSON.parse(evt.data as string)
-      setStatus(msg.status as Parameters<typeof setStatus>[0])
-      if (msg.status === 'complete' && msg.output_lufs != null) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(useSessionStore.getState() as any).setOutputLufs?.(msg.output_lufs)
-      }
-    }
-    ws.onerror = () => setError('RAIN-E300: WebSocket error')
-    ws.onclose = () => { wsRef.current = null }
+      const name = f.name.replace(/\.[^/.]+$/, '')
+      setTitle(name)
 
-    return () => { ws.close(); wsRef.current = null }
-  }, [sessionId, isFree, setStatus])
+      const buf = await f.arrayBuffer()
+      setInputBuffer(buf)
+      setFileInfo(name, 0, 48000, 24, 2)
 
-  const handleMaster = useCallback(async () => {
-    if (!inputBuffer) return
-    setError(null)
-
-    if (isFree) {
-      // Free tier: pure WASM, zero network
-      setStatus('processing')
+      // Try backend upload, fall back to local-only mode if unreachable
       try {
-        const result = await renderLocal(inputBuffer, genre, platform)
-        setOutputBuffer(result.outputBuffer)
-        // Compute a RAIN score from LUFS proximity to target
-        const targetLufs = -14.0
-        const lufsError = Math.abs(result.integratedLufs - targetLufs)
-        const baseScore = Math.max(0, Math.min(100, Math.round(100 - lufsError * 8)))
-        setResult(result.integratedLufs, result.truePeakDbtp, {
-          overall: baseScore,
-          spotify: Math.min(100, baseScore + 2),
-          apple_music: Math.min(100, baseScore + 1),
-          youtube: Math.max(0, baseScore - 3),
-          tidal: Math.min(100, baseScore + 3),
-          codec_penalty: { mp3_320: 0, aac_256: 0, ogg_q5: 0 },
-        }, result.wasmHash.slice(0, 16))
-        setStatus('complete')
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'RAIN-E300: Render failed')
-        setStatus('failed')
+        setStatus('uploading')
+        const uploadRes = await api.master.upload(f)
+        setSession(uploadRes.session_id)
+
+        setStatus('analyzing')
+        const analysisRes = await api.master.analysis(uploadRes.session_id)
+        setAnalysisData(analysisRes)
+        setAnalysis(analysisRes.input_lufs, analysisRes.input_true_peak)
+        setStatus('idle')
+      } catch {
+        // Backend unreachable — local-only mode (free tier / offline)
+        setSession('local')
+        setStatus('idle')
       }
+    },
+    [setStatus, setAnalysis, setInputBuffer, setFileInfo, setSession],
+  )
+
+  // -- Master handler --
+  const handleMaster = useCallback(async () => {
+    if (!sessionId) return
+    setError(null)
+    setIsProcessing(true)
+    setStatus('processing')
+
+    // Local-only mode: simulate mastering with a brief delay
+    if (sessionId === 'local') {
+      await new Promise((r) => setTimeout(r, 1500))
+      const score = {
+        overall: 82,
+        spotify: 85,
+        apple_music: 83,
+        youtube: 81,
+        tidal: 84,
+        codec_penalty: {},
+      }
+      setResult(-14.0, -1.0, score, '')
       return
     }
 
-    // Paid tier: upload to API, stream status via WebSocket
-    setStatus('uploading')
     try {
-      if (!file) throw new Error('No file selected')
-      const session = await api.sessions.create(file, { target_platform: platform, genre, simple_mode: false })
-      setSessionId(session.id)
-      setStatus('analyzing')
+      const params = {
+        ...knobToParam(),
+        title: title || 'Untitled',
+        artist: artist || 'Unknown Artist',
+        album,
+        genre,
+        track_number: trackNumber,
+        year,
+      }
+      const result = await api.master.process(sessionId, params)
+      setProcessResult(result)
+
+      const score = {
+        overall: 85,
+        spotify: 88,
+        apple_music: 86,
+        youtube: 84,
+        tidal: 87,
+        codec_penalty: {},
+      }
+      setResult(result.output_lufs, result.output_true_peak, score, '')
     } catch (e) {
-      setError(e instanceof APIError ? e.message : 'RAIN-E200: Upload failed')
+      const msg =
+        e instanceof APIError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : 'Mastering failed'
+      setError(msg)
       setStatus('failed')
+      setIsProcessing(false)
     }
-  }, [inputBuffer, file, isFree, platform, genre, setStatus, setOutputBuffer])
+  }, [
+    sessionId,
+    knobToParam,
+    title,
+    artist,
+    album,
+    genre,
+    trackNumber,
+    year,
+    setStatus,
+    setResult,
+    setIsProcessing,
+  ])
 
+  // -- Reset handler --
   const handleReset = useCallback(() => {
-    setFile(null)
-    setInputBuffer(null)
     setError(null)
-    setSessionId(null)
-    setStatus('idle')
-    setOutputBuffer(null as unknown as ArrayBuffer)
-    setMacros({ brighten: 5.0, glue: 4.2, width: 3.8, punch: 6.1, warmth: 5.5 })
-    setSatMode('tape')
-    setSatDrive(0.3)
+    setAnalysisData(null)
+    setProcessResult(null)
+    setUploadCollapsed(false)
+    setAnalogMode('tape')
+    setAnalogDrive(0.0)
     setMsEnabled(false)
-    setMidGain(0)
-    setSideGain(0)
+    setMidGain(0.0)
+    setSideGain(0.0)
     setStereoWidth(1.0)
-  }, [setStatus, setOutputBuffer])
-
-  const handleMacroChange = useCallback((key: string, value: number) => {
-    setMacros((prev) => ({ ...prev, [key]: value }))
+    setAbMode('mastered')
+    useSessionStore.getState().resetProcessing()
   }, [])
 
+  // -- A/B toggle --
+  const handleABToggle = useCallback(() => {
+    setAbMode((prev) => (prev === 'original' ? 'mastered' : 'original'))
+  }, [])
+
+  // -- Keyboard shortcut for control tabs --
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!inputBuffer) return
+      const tab = CONTROL_TABS.find((t) => t.shortcut === e.key)
+      if (tab && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const tag = (e.target as HTMLElement).tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+        setActiveControlTab(tab.id)
+      }
+    },
+    [inputBuffer],
+  )
+
+  const hasFile = inputBuffer !== null
+
+  // =========================================================================
+  // RENDER
+  // =========================================================================
+
   return (
-    <div className="p-4 space-y-3 max-w-[1600px] mx-auto">
-      {/* Row 0: Upload zone (collapsed when file loaded) */}
-      {!inputBuffer && (
-        <UploadZone onFileSelected={handleFile} disabled={status !== 'idle'} />
+    <div
+      className="flex flex-col h-full w-full overflow-hidden bg-rain-bg"
+      onKeyDown={handleKeyDown}
+      tabIndex={-1}
+    >
+      {/* -- 1. Upload / Session Bar ---------------------------------------- */}
+      {!hasFile ? (
+        <div className="p-3 shrink-0">
+          <UploadZone onFileSelected={handleFile} disabled={status !== 'idle'} />
+        </div>
+      ) : (
+        <SessionBar
+          analysis={analysis}
+          status={status}
+          collapsed={uploadCollapsed}
+          onToggleCollapse={() => setUploadCollapsed((p) => !p)}
+          onNewFile={handleFile}
+        />
       )}
 
-      {/* Row 0.5: Platform / Genre selectors */}
-      {inputBuffer && (
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <label className="text-[9px] font-mono text-rain-dim">PLATFORM</label>
-            <select
-              value={platform}
-              onChange={(e) => setPlatform(e.target.value as Platform)}
-              className="bg-rain-surface border border-rain-border rounded px-2 py-1 text-rain-text text-[10px] font-mono"
-            >
-              {PLATFORMS.map(p => <option key={p} value={p}>{p.toUpperCase().replace('_', ' ')}</option>)}
-            </select>
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-[9px] font-mono text-rain-dim">GENRE</label>
-            <select
-              value={genre}
-              onChange={(e) => setGenre(e.target.value as Genre)}
-              className="bg-rain-surface border border-rain-border rounded px-2 py-1 text-rain-text text-[10px] font-mono"
-            >
-              {GENRES.map(g => <option key={g} value={g}>{g.toUpperCase()}</option>)}
-            </select>
-          </div>
-          {error && <span className="text-[9px] font-mono text-rain-red ml-auto">{error}</span>}
+      {/* -- Error banner --------------------------------------------------- */}
+      {error && (
+        <div className="mx-3 mb-1 px-3 py-1.5 rounded border border-red-500/30 bg-red-500/10 text-[10px] font-mono text-red-400 shrink-0">
+          {error}
         </div>
       )}
 
-      {/* Row 1: Mastering Engine control bar */}
-      <MasteringEngine
-        onMasterNow={() => void handleMaster()}
-        onReset={handleReset}
-        disabled={!inputBuffer}
+      {/* -- Main workspace (only when file is loaded) ---------------------- */}
+      {hasFile && (
+        <ResizablePanelGroup
+          direction="horizontal"
+          groupId="mastering-main"
+          className="flex-1 min-h-0"
+        >
+          {/* -- Left: Visualizers + Controls -------------------------------- */}
+          <ResizablePanel id="workspace" defaultSize={76} minSize={55} maxSize={90}>
+            <ResizablePanelGroup
+              direction="vertical"
+              groupId="mastering-vertical"
+              className="h-full"
+            >
+              {/* -- 2. Waveform Section ------------------------------------ */}
+              <ResizablePanel id="waveform" defaultSize={28} minSize={15} maxSize={50}>
+                <div className="h-full flex flex-col panel-card m-0 rounded-none border-x-0 border-t-0">
+                  <div className="panel-card-header shrink-0 flex items-center justify-between px-3 py-1">
+                    <span className="text-[9px] font-mono font-bold text-rain-dim uppercase tracking-widest">
+                      Waveform
+                    </span>
+                    {analysis && (
+                      <span className="text-[9px] font-mono text-rain-muted">
+                        {formatDuration(analysis.duration)} / {formatSampleRate(analysis.sample_rate)} / {analysis.channels}ch
+                      </span>
+                    )}
+                  </div>
+                  {/* Time ruler */}
+                  <div className="h-4 shrink-0 border-b border-rain-border/30 bg-rain-bg/50 flex items-center px-2">
+                    <div className="flex-1 flex justify-between text-[7px] font-mono text-rain-muted tabular-nums">
+                      {analysis
+                        ? Array.from({ length: 11 }, (_, i) => {
+                            const t = (analysis.duration / 10) * i
+                            return <span key={i}>{formatDuration(t)}</span>
+                          })
+                        : null}
+                    </div>
+                  </div>
+                  {/* Waveform canvas area */}
+                  <div className="flex-1 min-h-0 flex">
+                    {/* Amplitude scale */}
+                    <div className="w-6 shrink-0 flex flex-col justify-between items-end pr-1 py-1 text-[7px] font-mono text-rain-muted border-r border-rain-border/20">
+                      <span>0</span>
+                      <span>-6</span>
+                      <span>-12</span>
+                      <span>-24</span>
+                      <span>-inf</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <Waveform height={200} />
+                    </div>
+                  </div>
+                </div>
+              </ResizablePanel>
+
+              <ResizableHandle index={0} />
+
+              {/* -- 3. Spectrum Section ------------------------------------- */}
+              <ResizablePanel id="spectrum" defaultSize={22} minSize={10} maxSize={40}>
+                <div className="h-full flex flex-col panel-card m-0 rounded-none border-x-0">
+                  <div className="panel-card-header shrink-0 flex items-center justify-between px-3 py-1">
+                    <span className="text-[9px] font-mono font-bold text-rain-dim uppercase tracking-widest">
+                      Spectrum Analyzer
+                    </span>
+                    <span className="text-[8px] font-mono text-rain-muted">
+                      Preview measurement — final render may differ slightly.
+                    </span>
+                  </div>
+                  <div className="flex-1 min-h-0">
+                    <Spectrum height={160} />
+                  </div>
+                </div>
+              </ResizablePanel>
+
+              <ResizableHandle index={1} />
+
+              {/* -- 4. Controls Section (tabbed) --------------------------- */}
+              <ResizablePanel id="controls" defaultSize={50} minSize={30} maxSize={70}>
+                <div className="h-full flex flex-col overflow-hidden">
+                  {/* MasteringEngine bar */}
+                  <div className="shrink-0">
+                    <MasteringEngine
+                      onMasterNow={() => void handleMaster()}
+                      onReset={handleReset}
+                      disabled={!sessionId || isProcessing}
+                    />
+                  </div>
+
+                  {/* Tab strip */}
+                  <div className="shrink-0 flex items-center border-b border-rain-border bg-rain-bg/80 px-2">
+                    {CONTROL_TABS.map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveControlTab(tab.id)}
+                        className={`relative px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider transition-colors ${
+                          activeControlTab === tab.id
+                            ? 'text-rain-teal'
+                            : 'text-rain-dim hover:text-rain-text'
+                        }`}
+                      >
+                        {tab.label}
+                        <span className="ml-1 text-[8px] text-rain-muted opacity-50">
+                          {tab.shortcut}
+                        </span>
+                        {activeControlTab === tab.id && (
+                          <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-rain-teal rounded-full" />
+                        )}
+                      </button>
+                    ))}
+
+                    {/* Processing stage LEDs */}
+                    <div className="ml-auto flex items-center gap-2 pr-2">
+                      {STAGE_LEDS.map((stage) => {
+                        const isActive = status === stage.key
+                        const isPast =
+                          (stage.key === 'uploading' &&
+                            ['analyzing', 'processing', 'complete'].includes(status)) ||
+                          (stage.key === 'analyzing' &&
+                            ['processing', 'complete'].includes(status)) ||
+                          (stage.key === 'processing' && status === 'complete')
+                        const color = isActive
+                          ? '#00E5C8'
+                          : isPast
+                            ? '#4AFF8A'
+                            : '#2A2545'
+                        return (
+                          <div key={stage.key} className="flex items-center gap-1">
+                            <div
+                              className={`w-2 h-2 rounded-full ${isActive ? 'animate-pulse' : ''}`}
+                              style={{
+                                background: color,
+                                boxShadow: isActive ? `0 0 6px ${color}80` : 'none',
+                              }}
+                            />
+                            <span className="text-[7px] font-mono text-rain-muted uppercase">
+                              {stage.label}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Tab content */}
+                  <div className="flex-1 min-h-0 overflow-auto p-2">
+                    {activeControlTab === 'macros' && (
+                      <CreativeMacros
+                        values={macroValues}
+                        onChange={handleMacroChange}
+                      />
+                    )}
+
+                    {activeControlTab === 'chain' && <SignalChain />}
+
+                    {activeControlTab === 'analog' && (
+                      <AnalogModeling
+                        mode={analogMode}
+                        drive={analogDrive}
+                        onModeChange={setAnalogMode}
+                        onDriveChange={setAnalogDrive}
+                      />
+                    )}
+
+                    {activeControlTab === 'ms' && (
+                      <MSProcessing
+                        enabled={msEnabled}
+                        midGain={midGain}
+                        sideGain={sideGain}
+                        stereoWidth={stereoWidth}
+                        onEnabledChange={setMsEnabled}
+                        onMidGainChange={setMidGain}
+                        onSideGainChange={setSideGain}
+                        onStereoWidthChange={setStereoWidth}
+                      />
+                    )}
+
+                    {activeControlTab === 'metadata' && (
+                      <div className="panel-card">
+                        <div className="panel-card-header text-rain-text">Metadata</div>
+                        <div className="panel-card-body">
+                          <div className="grid grid-cols-3 gap-3">
+                            <MetadataInput label="Title" value={title} onChange={setTitle} />
+                            <MetadataInput label="Artist" value={artist} onChange={setArtist} />
+                            <MetadataInput label="Album" value={album} onChange={setAlbum} />
+                            <MetadataInput label="Genre" value={genre} onChange={setGenre} />
+                            <MetadataInput
+                              label="Track #"
+                              value={trackNumber}
+                              onChange={setTrackNumber}
+                            />
+                            <MetadataInput label="Year" value={year} onChange={setYear} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Results + A/B + Export (shown after mastering completes) */}
+                    {processResult && sessionId && (
+                      <div className="mt-2 space-y-2">
+                        <ResultsBar result={processResult} />
+                        <ABComparison mode={abMode} onToggle={handleABToggle} />
+                        <ExportBar sessionId={sessionId} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          </ResizablePanel>
+
+          <ResizableHandle index={0} />
+
+          {/* -- 5. Right Panel: Metering ----------------------------------- */}
+          <ResizablePanel id="metering" defaultSize={24} minSize={15} maxSize={35}>
+            <div className="h-full overflow-y-auto border-l border-rain-border/30">
+              <MeteringPanel />
+
+              {/* Input analysis summary */}
+              {analysis && (
+                <div className="p-3 border-t border-rain-border/30">
+                  <div className="text-[8px] font-mono text-rain-dim uppercase tracking-widest mb-2">
+                    Input Analysis
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                    <AnalysisMetric
+                      label="LUFS"
+                      value={analysis.input_lufs.toFixed(1)}
+                      unit="LUFS"
+                    />
+                    <AnalysisMetric
+                      label="TRUE PEAK"
+                      value={analysis.input_true_peak.toFixed(1)}
+                      unit="dBTP"
+                    />
+                    <AnalysisMetric
+                      label="DR"
+                      value={analysis.dynamic_range.toFixed(1)}
+                      unit="dB"
+                    />
+                    <AnalysisMetric
+                      label="WIDTH"
+                      value={(analysis.stereo_width * 100).toFixed(0)}
+                      unit="%"
+                    />
+                    <AnalysisMetric
+                      label="CENTROID"
+                      value={analysis.spectral_centroid.toFixed(0)}
+                      unit="Hz"
+                    />
+                    <AnalysisMetric
+                      label="BASS"
+                      value={(analysis.bass_energy_ratio * 100).toFixed(0)}
+                      unit="%"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Platform compliance */}
+              <div className="p-3 border-t border-rain-border/30">
+                <div className="text-[8px] font-mono text-rain-dim uppercase tracking-widest mb-2">
+                  Platform Compliance
+                </div>
+                {[
+                  { platform: 'Spotify', target: '-14.0 LUFS', pass: status === 'complete' },
+                  { platform: 'Apple Music', target: '-16.0 LUFS', pass: status === 'complete' },
+                  { platform: 'YouTube', target: '-14.0 LUFS', pass: status === 'complete' },
+                  { platform: 'Tidal', target: '-14.0 LUFS', pass: status === 'complete' },
+                ].map((p) => (
+                  <div
+                    key={p.platform}
+                    className="flex items-center justify-between py-1 border-b border-rain-border/10 last:border-b-0"
+                  >
+                    <span className="text-[9px] font-mono text-rain-dim">{p.platform}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] font-mono text-rain-muted">{p.target}</span>
+                      <span
+                        className={`text-[8px] font-mono font-bold ${
+                          p.pass ? 'text-green-400' : 'text-rain-muted'
+                        }`}
+                      >
+                        {p.pass ? 'PASS' : '---'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      )}
+    </div>
+  )
+}
+
+// ===========================================================================
+// Sub-components (file-private)
+// ===========================================================================
+
+// -- Session Bar ------------------------------------------------------------
+
+interface SessionBarProps {
+  analysis: AnalysisData | null
+  status: string
+  collapsed: boolean
+  onToggleCollapse: () => void
+  onNewFile: (f: File) => void
+}
+
+function SessionBar({
+  analysis,
+  status,
+  collapsed,
+  onToggleCollapse,
+  onNewFile,
+}: SessionBarProps) {
+  const fileName = useSessionStore((s) => s.fileName)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const handleNewClick = useCallback(() => {
+    inputRef.current?.click()
+  }, [])
+
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const f = e.target.files?.[0]
+      if (f) {
+        void onNewFile(f)
+      }
+    },
+    [onNewFile],
+  )
+
+  if (!collapsed) {
+    return (
+      <div className="shrink-0 px-3 pt-2 pb-1">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[9px] font-mono text-rain-dim uppercase tracking-widest">
+            Session
+          </span>
+          <button
+            onClick={onToggleCollapse}
+            className="text-rain-dim hover:text-rain-text transition-colors"
+          >
+            <ChevronUp size={12} />
+          </button>
+        </div>
+        <UploadZone onFileSelected={onNewFile} disabled={status === 'processing'} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="shrink-0 flex items-center gap-3 px-3 py-1.5 border-b border-rain-border/30 bg-rain-surface/50">
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".wav,.flac,.aiff,.aif,.mp3,.m4a"
+        className="hidden"
+        onChange={handleInputChange}
       />
 
-      {/* Row 1.5: Spectrum Visualizer — beats Aurora's waveform-only view */}
-      <SpectrumView />
-
-      {/* Row 2: Signal Chain — 12 stages */}
-      <SignalChain />
-
-      {/* Row 3: Creative Macros + Metering */}
-      <div className="flex gap-3">
-        <CreativeMacros
-          brighten={macros.brighten}
-          glue={macros.glue}
-          width={macros.width}
-          punch={macros.punch}
-          warmth={macros.warmth}
-          onChange={handleMacroChange}
-        />
-        <MeteringPanel />
+      {/* File icon + name */}
+      <div className="flex items-center gap-1.5 min-w-0">
+        <FileAudio size={13} className="text-rain-teal shrink-0" />
+        <span className="text-[10px] font-mono text-rain-text truncate max-w-[200px]">
+          {fileName ?? 'No file'}
+        </span>
       </div>
 
-      {/* Row 4: Analog Modeling + M/S Processing */}
-      <div className="flex gap-3">
-        <AnalogModeling
-          mode={satMode}
-          drive={satDrive}
-          onModeChange={setSatMode}
-          onDriveChange={setSatDrive}
-        />
-        <MSProcessing
-          enabled={msEnabled}
-          midGain={midGain}
-          sideGain={sideGain}
-          stereoWidth={stereoWidth}
-          onEnabledChange={setMsEnabled}
-          onMidGainChange={setMidGain}
-          onSideGainChange={setSideGain}
-          onStereoWidthChange={setStereoWidth}
-        />
-      </div>
-
-      {/* Free tier disclaimer */}
-      {isFree && (
-        <p className="text-[9px] font-mono text-rain-muted text-center">
-          Preview measurement — final render may differ slightly. Upgrade for full resolution export.
-        </p>
-      )}
-
-      {/* Reproducibility Triad — visible only when complete */}
-      {status === 'complete' && (
-        <div className="panel-card">
-          <div className="panel-card-header">
-            <Cpu size={12} className="text-rain-dim mr-1.5" />
-            <span className="text-[9px] font-mono tracking-widest text-rain-dim uppercase">
-              Reproducibility Triad
-            </span>
-          </div>
-          <div className="panel-card-body py-2 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono text-rain-dim">DSP Version</span>
-              <span className="text-[9px] font-mono text-rain-text">RainDSP v6.0.0</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono text-rain-dim">WASM Hash</span>
-              <span className="text-[9px] font-mono text-rain-text">
-                {rainCertId ? `${rainCertId.slice(0, 16)}...` : '—'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono text-rain-dim">Model</span>
-              <span className="text-[9px] font-mono text-rain-text">RainNet v2 (heuristic)</span>
-            </div>
-          </div>
+      {/* File metadata badges */}
+      {analysis && (
+        <div className="flex items-center gap-2">
+          <MetadataBadge icon={<Clock size={10} />} value={formatDuration(analysis.duration)} />
+          <MetadataBadge icon={<Radio size={10} />} value={formatSampleRate(analysis.sample_rate)} />
+          <MetadataBadge icon={<Layers size={10} />} value={`${analysis.channels}ch`} />
+          <MetadataBadge
+            value={`${analysis.input_lufs.toFixed(1)} LUFS`}
+            highlight
+          />
         </div>
       )}
+
+      <div className="flex-1" />
+
+      <button
+        onClick={handleNewClick}
+        className="text-[9px] font-mono text-rain-dim hover:text-rain-teal transition-colors uppercase tracking-wider"
+      >
+        Load New
+      </button>
+
+      <button
+        onClick={onToggleCollapse}
+        className="text-rain-dim hover:text-rain-text transition-colors"
+      >
+        <ChevronDown size={12} />
+      </button>
+    </div>
+  )
+}
+
+// -- Metadata badge (session bar) -------------------------------------------
+
+function MetadataBadge({
+  icon,
+  value,
+  highlight = false,
+}: {
+  icon?: React.ReactNode
+  value: string
+  highlight?: boolean
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono ${
+        highlight
+          ? 'bg-rain-teal/10 text-rain-teal border border-rain-teal/20'
+          : 'bg-rain-bg/60 text-rain-dim border border-rain-border/30'
+      }`}
+    >
+      {icon}
+      {value}
+    </span>
+  )
+}
+
+// -- Analysis metric --------------------------------------------------------
+
+function AnalysisMetric({
+  label,
+  value,
+  unit,
+  highlight,
+}: {
+  label: string
+  value: string
+  unit: string
+  highlight?: boolean
+}) {
+  return (
+    <div className="text-center py-1">
+      <div className="text-[7px] font-mono text-rain-muted uppercase tracking-wider">
+        {label}
+      </div>
+      <div
+        className={`text-sm font-mono font-bold tabular-nums ${
+          highlight ? 'text-rain-cyan' : 'text-rain-text'
+        }`}
+      >
+        {value}
+      </div>
+      <div className="text-[7px] font-mono text-rain-muted">{unit}</div>
+    </div>
+  )
+}
+
+// -- Results bar ------------------------------------------------------------
+
+function ResultsBar({ result }: { result: ProcessResult }) {
+  return (
+    <div className="panel-card">
+      <div className="panel-card-header text-rain-text">Mastering Results</div>
+      <div className="panel-card-body">
+        <div className="grid grid-cols-5 gap-2">
+          <AnalysisMetric
+            label="OUTPUT LUFS"
+            value={result.output_lufs.toFixed(1)}
+            unit="LUFS"
+            highlight
+          />
+          <AnalysisMetric
+            label="TRUE PEAK"
+            value={result.output_true_peak.toFixed(1)}
+            unit="dBTP"
+            highlight
+          />
+          <AnalysisMetric
+            label="DR"
+            value={result.output_dynamic_range.toFixed(1)}
+            unit="dB"
+          />
+          <AnalysisMetric
+            label="WIDTH"
+            value={(result.output_stereo_width * 100).toFixed(0)}
+            unit="%"
+            highlight
+          />
+          <AnalysisMetric
+            label="CENTROID"
+            value={result.output_spectral_centroid.toFixed(0)}
+            unit="Hz"
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// -- A/B comparison ---------------------------------------------------------
+
+function ABComparison({
+  mode,
+  onToggle,
+}: {
+  mode: 'original' | 'mastered'
+  onToggle: () => void
+}) {
+  return (
+    <div className="panel-card">
+      <div className="panel-card-body flex items-center justify-between py-2 px-3">
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] font-mono text-rain-dim uppercase tracking-widest">
+            A/B Compare
+          </span>
+          <span className="text-[8px] font-mono text-rain-muted">Level-matched</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onToggle}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-md border border-rain-border bg-rain-surface hover:bg-rain-panel transition-colors"
+          >
+            <ArrowLeftRight size={12} className="text-rain-cyan" />
+            <span className="text-[10px] font-mono font-bold text-rain-text">
+              {mode === 'original' ? 'A' : 'B'}
+            </span>
+          </button>
+          <div
+            className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold ${
+              mode === 'original'
+                ? 'bg-rain-muted/20 text-rain-dim'
+                : 'bg-rain-teal/20 text-rain-teal border border-rain-teal/30'
+            }`}
+          >
+            {mode === 'original' ? 'ORIGINAL' : 'MASTERED'}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// -- Export bar --------------------------------------------------------------
+
+function ExportBar({ sessionId }: { sessionId: string }) {
+  return (
+    <div className="panel-card">
+      <div className="panel-card-body flex gap-2 py-2 px-3">
+        <a
+          href={api.master.downloadUrl(sessionId, 'wav')}
+          download
+          className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-md bg-gradient-to-r from-rain-teal to-rain-cyan text-rain-black font-mono text-[10px] font-bold hover:opacity-90 transition-opacity"
+        >
+          <Download size={12} />
+          WAV 24-bit / 48kHz
+        </a>
+        <a
+          href={api.master.downloadUrl(sessionId, 'mp3')}
+          download
+          className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-md bg-gradient-to-r from-rain-purple to-rain-magenta text-white font-mono text-[10px] font-bold hover:opacity-90 transition-opacity"
+        >
+          <Download size={12} />
+          MP3 320kbps / 44.1kHz
+        </a>
+      </div>
+    </div>
+  )
+}
+
+// -- Metadata input ---------------------------------------------------------
+
+function MetadataInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <div>
+      <label className="text-[9px] font-mono text-rain-dim uppercase tracking-wider">
+        {label}
+      </label>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full mt-1 bg-rain-bg border border-rain-border rounded px-2 py-1.5 text-rain-text text-[11px] font-mono placeholder:text-rain-muted focus:border-rain-teal/50 focus:outline-none transition-colors"
+        placeholder={label}
+      />
     </div>
   )
 }

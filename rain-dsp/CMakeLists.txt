@@ -20,6 +20,8 @@ set(RAIN_DSP_SOURCES
     src/ms_processing.cpp
     src/saturation.cpp
     src/riaa.cpp
+    src/biquad.cpp
+    src/limiter.cpp
 )
 
 if(BUILD_WASM)
@@ -55,13 +57,23 @@ if(BUILD_WASM)
                     -sENVIRONMENT='web,worker' \
                     -sWASM_BIGINT \
                     -O3 \
-                    -msimd128"
+                    -msimd128 \
+                    -mrelaxed-simd \
+                    -sAUDIO_WORKLET \
+                    -sWASM_WORKERS \
+                    -sSHARED_MEMORY \
+                    -sINITIAL_MEMORY=67108864 \
+                    -sMALLOC=emmalloc \
+                    --closure=1"
     )
     target_compile_options(rain_dsp_wasm PRIVATE
         -O3
         -msimd128
+        -mrelaxed-simd
         -ffast-math
         -fno-exceptions
+        -fno-rtti
+        -flto
     )
 else()
     # Native library (for testing)

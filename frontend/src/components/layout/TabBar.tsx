@@ -1,30 +1,29 @@
 import { NavLink } from 'react-router-dom'
 import {
-  Disc3, Layers, AudioWaveform, ShieldCheck,
-  Download, Send, BarChart3, Rocket, Settings,
-  GitCompare, Wrench, MessageSquare, BookOpen
+  Disc3, Layers, Move3D, ShieldCheck, Download, Send,
+  Settings, BarChart3, Rocket, Users, Disc, Database, TestTube2, TrendingUp
 } from 'lucide-react'
 
 const TABS = [
-  { to: '',           label: 'MASTER',     icon: Disc3,          end: true },
-  { to: 'stems',      label: 'STEMS',      icon: Layers },
-  { to: 'reference',  label: 'REFERENCE',  icon: GitCompare },
-  { to: 'repair',     label: 'REPAIR',     icon: Wrench },
-  { to: 'spatial',    label: 'SPATIAL',    icon: AudioWaveform },
-  { to: 'qc',         label: 'QC',         icon: ShieldCheck },
-  { to: 'export',     label: 'EXPORT',     icon: Download },
-  { to: 'distribute', label: 'DISTRIBUTE', icon: Send },
-  { to: 'collab',     label: 'COLLAB',     icon: MessageSquare },
-  { to: 'analytics',  label: 'ANALYTICS',  icon: BarChart3 },
-  { to: 'roadmap',    label: 'ROADMAP',    icon: Rocket },
-  { to: 'docs',       label: 'DOCS',       icon: BookOpen },
-  { to: 'settings',   label: 'SETTINGS',   icon: Settings },
+  { to: '', label: 'Master', icon: Disc3, end: true },
+  { to: 'stems', label: 'Stems', icon: Layers },
+  { to: 'spatial', label: 'Spatial', icon: Move3D },
+  { to: 'qc', label: 'QC', icon: ShieldCheck },
+  { to: 'collab', label: 'Collab', icon: Users },
+  { to: 'export', label: 'Export', icon: Download },
+  { to: 'distribute', label: 'Distribute', icon: Send },
+  { to: 'album', label: 'Album', icon: Disc },
+  { to: 'dataset', label: 'Dataset', icon: Database },
+  { to: 'test', label: 'Test', icon: TestTube2 },
+  { to: 'market', label: 'Market', icon: TrendingUp },
+  { to: 'roadmap', label: 'Roadmap', icon: Rocket },
+  { to: 'analytics', label: 'Analytics', icon: BarChart3 },
+  { to: 'settings', label: 'Settings', icon: Settings },
 ] as const
 
 export function TabBar() {
   return (
-    <nav className="h-10 bg-rain-bg border-b border-rain-border flex items-center gap-0.5 px-3 overflow-x-auto shrink-0"
-         style={{ scrollbarWidth: 'none' }}>
+    <nav className="h-10 bg-rain-bg/60 border-b border-rain-border/20 flex items-center gap-0.5 px-3 overflow-x-auto shrink-0 z-10">
       {TABS.map((tab) => {
         const { to, label, icon: Icon } = tab
         const end = 'end' in tab ? (tab as { end: boolean }).end : undefined
@@ -33,14 +32,10 @@ export function TabBar() {
             key={label}
             to={to}
             end={end}
-            className={({ isActive }) =>
-              `tab-3d flex items-center gap-1.5 ${isActive ? 'active' : ''}`
-            }
+            className={({ isActive }) => `tab-3d flex items-center gap-1.5 ${isActive ? 'active' : ''}`}
           >
-            <Icon size={11} />
-            <span style={{ fontFamily: 'var(--font-ui)', letterSpacing: '0.08em' }}>
-              {label}
-            </span>
+            <Icon size={12} />
+            <span>{label}</span>
           </NavLink>
         )
       })}
