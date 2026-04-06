@@ -408,7 +408,13 @@ async def _run_cascade(
 
 
 def _ensure_models_loaded(checkpoint_path: str, device: str) -> None:
-    """Load all four cascade models once per worker process."""
+    """Load correct model for each cascade pass once per worker process.
+
+    Pass 1: BS-RoFormer SW (6-stem)
+    Pass 2: MVSep Karaoke MelBand RoFormer (lead/backing vocals)
+    Pass 3: Spectral fallback (no model needed — LarsNet placeholder)
+    Pass 4: anvuew dereverb MelBand RoFormer (room/fx separation)
+    """
     from app.services import separation_engine
 
     if _SeparationTaskBase._pass1_model is None:
@@ -416,17 +422,10 @@ def _ensure_models_loaded(checkpoint_path: str, device: str) -> None:
             checkpoint_path, device
         )
     if _SeparationTaskBase._pass2_model is None:
-        _SeparationTaskBase._pass2_model = separation_engine.load_bsroformer_model(
-            checkpoint_path, device
-        )
-    if _SeparationTaskBase._pass3_model is None:
-        _SeparationTaskBase._pass3_model = separation_engine.load_bsroformer_model(
-            checkpoint_path, device
-        )
+        _SeparationTaskBase._pass2_model = separation_engine.load_karaoke_model(device)
+    # Pass 3 uses spectral bandpass fallback — no model needed
     if _SeparationTaskBase._pass4_model is None:
-        _SeparationTaskBase._pass4_model = separation_engine.load_bsroformer_model(
-            checkpoint_path, device
-        )
+        _SeparationTaskBase._pass4_model = separation_engine.load_dereverb_model(device)
 
 
 # ---------------------------------------------------------------------------

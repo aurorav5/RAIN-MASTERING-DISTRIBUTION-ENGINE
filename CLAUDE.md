@@ -415,8 +415,11 @@ STRIPE_PRICE_STUDIO_PRO_MONTHLY=price_...
 RAIN_NORMALIZATION_VALIDATED=false
 ANTHROPIC_API_KEY=sk-ant-...
 ONNX_MODEL_PATH=/models/rain_base.onnx
-DEMUCS_MODEL=htdemucs_6s
-DEMUCS_DEVICE=cpu
+
+# Separation (BS-RoFormer cascade)
+SEPARATION_ENABLED=false
+BSROFORMER_MODEL_PATH=ml/checkpoints/bs_roformer_sw.ckpt
+BSROFORMER_DEVICE=cuda:0
 
 # Security
 RAIN_WATERMARK_KEY_PATH=/etc/rain/wm.key

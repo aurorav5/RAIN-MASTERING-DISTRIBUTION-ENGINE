@@ -1,23 +1,23 @@
 """
-RAIN Prototype Mastering Engine — Pure Python DSP Chain
+RAIN Production Mastering Engine — Server-Side Python DSP Chain
 
-7-stage mastering pipeline using scipy/numpy. This is the PROTOTYPE engine,
-NOT the production RainDSP C++/WASM engine. Uses identical DSP math in 64-bit float.
+64-bit float processing pipeline for server-side renders (paid tiers).
+The client-side render path uses RainDSP (C++/WASM).
 
-RAIN v2 UPGRADE: Target-state driven processing with groove awareness, multi-pass
-optimization, and genre-specific life injection.
+10-stage mastering pipeline using scipy/numpy with groove awareness,
+multi-pass optimization, and genre-specific life injection.
 
 Stages:
   1. Input Normalization (resample to 48kHz, 64-bit float)
-  2. Analysis (LUFS, true peak, spectral centroid, crest factor, stereo width, bass energy, GROOVE)
-  3. Intent Processing (genre-aware target state calculation)
-  4. EQ (brightness + air + subsonic HPF + genre-forced low-end)
-  5. Multiband Compression (3-band: low/mid/high, groove-aware)
-  6. Stereo Widening (M/S with bass mono, side HF boost, genre-aware)
-  7. Groove Enhancement (transient shaping, microtiming preparation)
-  8. Life Injection (parallel saturation, genre-specific energy)
-  9. Limiting (look-ahead limiter with LUFS targeting)
-  10. Evaluation & Adjustment (multi-pass optimization with rollback)
+  2. Analysis (LUFS, true peak, spectral centroid, crest factor, stereo width, bass energy, groove)
+  3. EQ (brightness + air + subsonic HPF + genre-forced low-end)
+  4. Multiband Compression (3-band: low/mid/high)
+  5. Stereo Widening (M/S with bass mono, side HF boost)
+  6. Groove Enhancement (transient shaping via GrooveEngine)
+  7. Life Injection (parallel saturation, genre-specific energy)
+  8. Limiting (look-ahead limiter with LUFS targeting)
+  9. Evaluation & Adjustment (multi-pass optimization with rollback)
+  10. Output Preparation (24-bit WAV + 320k MP3 export with TPDF dither)
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ import numpy as np
 import pyloudnorm as pyln
 import resampy
 import soundfile as sf
+import structlog
 from numpy.typing import NDArray
 from pydub import AudioSegment
 from scipy.signal import butter, sosfilt, sosfiltfilt, resample_poly
@@ -41,6 +42,8 @@ from scipy.signal import butter, sosfilt, sosfiltfilt, resample_poly
 # Import RAIN v2 engines
 from .groove_engine import GrooveEngine, GrooveAnalysisResult
 from .intent_engine import IntentResult, ControlSignal
+
+logger = structlog.get_logger(__name__)
 
 INTERNAL_SR = 48000
 INTERNAL_DTYPE = np.float64
@@ -261,7 +264,7 @@ def compute_bass_energy_ratio(audio: NDArray[np.float64], sr: int) -> float:
 
 
 def analyze(audio: NDArray[np.float64], sr: int, original_sr: int) -> AnalysisResult:
-    """Run full analysis on normalized audio."""
+    """Run full analysis on normalized audio, including groove metrics."""
     meter = pyln.Meter(sr)
     lufs = meter.integrated_loudness(audio)
     if np.isinf(lufs) or np.isnan(lufs):
@@ -274,6 +277,10 @@ def analyze(audio: NDArray[np.float64], sr: int, original_sr: int) -> AnalysisRe
     be = compute_bass_energy_ratio(audio, sr)
     dr = cf  # dynamic range approximated by crest factor
 
+    # Groove analysis via GrooveEngine
+    groove_engine = GrooveEngine(sample_rate=sr)
+    groove = groove_engine.analyze(audio)
+
     return AnalysisResult(
         input_lufs=lufs,
         input_true_peak=tp,
@@ -285,6 +292,11 @@ def analyze(audio: NDArray[np.float64], sr: int, original_sr: int) -> AnalysisRe
         sample_rate=original_sr,
         channels=audio.shape[1],
         duration=len(audio) / sr,
+        groove_score=groove.groove_score,
+        swing_ratio=groove.swing_ratio,
+        timing_variance=groove.timing_variance,
+        transient_sharpness=groove.transient_sharpness,
+        tempo_bpm=groove.tempo_bpm,
     )
 
 
@@ -503,7 +515,86 @@ def apply_stereo_widening(
 
 
 # ---------------------------------------------------------------------------
-# Stage 6 — Limiting (Loudness)
+# Stage 6 — Groove Enhancement
+# ---------------------------------------------------------------------------
+
+def apply_groove_enhancement(
+    audio: NDArray[np.float64],
+    sr: int,
+    analysis: AnalysisResult,
+    genre: str = "default",
+) -> NDArray[np.float64]:
+    """Stage 6: Transient shaping and groove enhancement via GrooveEngine.
+
+    Enhances transient definition and rhythmic feel based on genre targets.
+    Electronic/hip-hop/afropop get more aggressive shaping; acoustic/jazz get less.
+    """
+    target_state = TargetState.from_genre(genre)
+    groove_engine = GrooveEngine(sample_rate=sr)
+
+    groove_result = GrooveAnalysisResult(
+        swing_ratio=analysis.swing_ratio,
+        timing_variance=analysis.timing_variance,
+        transient_sharpness=analysis.transient_sharpness,
+        rhythmic_consistency=1.0 - analysis.timing_variance,
+        groove_score=analysis.groove_score,
+        tempo_bpm=analysis.tempo_bpm,
+        transient_count=0,
+        intervals=np.array([]),
+    )
+
+    audio = groove_engine.enhance_groove(audio, groove_result, target_groove=target_state.groove)
+    return audio
+
+
+# ---------------------------------------------------------------------------
+# Stage 7 — Life Injection (Parallel Saturation)
+# ---------------------------------------------------------------------------
+
+def apply_life_injection(
+    audio: NDArray[np.float64],
+    sr: int,
+    genre: str = "default",
+) -> NDArray[np.float64]:
+    """Stage 7: Parallel saturation for energy and life.
+
+    Applies soft-clipping saturation on a parallel path and mixes at low level.
+    Genre-informed: electronic gets more drive, acoustic/jazz gets less.
+    """
+    # Genre-specific saturation intensity
+    drive_table = {
+        "electronic": 0.25,
+        "hiphop": 0.20,
+        "afropop_house": 0.22,
+        "pop": 0.15,
+        "rock": 0.18,
+        "rnb_soul": 0.12,
+        "latin": 0.15,
+        "gospel": 0.10,
+        "jazz": 0.06,
+        "classical": 0.03,
+        "podcast": 0.0,
+    }
+    drive = drive_table.get(genre.lower(), 0.10)
+
+    if drive < 0.01:
+        return audio
+
+    # Mix ratio: saturated signal blended in at low level
+    mix = drive * 0.4  # e.g., electronic: 0.25 * 0.4 = 10% wet
+
+    # Soft-clip saturation (tanh waveshaper)
+    gain = 1.0 + drive * 8.0  # drive 0.25 → gain 3.0
+    saturated = np.tanh(audio * gain) / np.tanh(gain)  # normalize back
+
+    # Parallel mix: dry + wet at controlled level
+    result = audio * (1.0 - mix) + saturated * mix
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Stage 8 — Limiting (Loudness)
 # ---------------------------------------------------------------------------
 
 def apply_limiter(
@@ -661,6 +752,27 @@ def export_mp3(
 # Full Mastering Chain
 # ---------------------------------------------------------------------------
 
+def _evaluate_output(
+    audio: NDArray[np.float64],
+    sr: int,
+    target_lufs: float,
+    input_centroid: float,
+) -> tuple[bool, float, float, float]:
+    """Evaluate output quality. Returns (passed, lufs, true_peak, centroid)."""
+    meter = pyln.Meter(sr)
+    lufs = meter.integrated_loudness(audio)
+    if np.isinf(lufs) or np.isnan(lufs):
+        lufs = -70.0
+    tp = measure_true_peak(audio, sr)
+    centroid = compute_spectral_centroid(audio, sr)
+
+    lufs_ok = abs(lufs - target_lufs) <= 1.0
+    centroid_ok = abs(centroid - input_centroid) <= 500.0
+    passed = lufs_ok and centroid_ok
+
+    return passed, lufs, tp, centroid
+
+
 def master_audio(
     input_path: str,
     output_dir: str,
@@ -668,7 +780,7 @@ def master_audio(
     params: MasteringParams | None = None,
     metadata: dict[str, str] | None = None,
 ) -> MasterResult:
-    """Execute the complete 7-stage mastering chain.
+    """Execute the complete 10-stage mastering chain.
 
     Args:
         input_path: Path to the input audio file
@@ -687,12 +799,25 @@ def master_audio(
     if metadata is None:
         metadata = {}
 
+    genre = metadata.get("genre", "default")
+
     # --- Stage 1: Input Normalization ---
     raw_audio, original_sr = load_audio(input_path)
     audio = normalize_input(raw_audio, original_sr)
 
-    # --- Stage 2: Analysis ---
+    # --- Stage 2: Analysis (includes groove via GrooveEngine) ---
     analysis = analyze(audio, INTERNAL_SR, original_sr)
+
+    logger.info(
+        "master_analysis_complete",
+        session_id=session_id,
+        stage="analysis",
+        input_lufs=round(analysis.input_lufs, 1),
+        groove_score=round(analysis.groove_score, 3),
+        tempo_bpm=round(analysis.tempo_bpm, 1),
+        transient_sharpness=round(analysis.transient_sharpness, 3),
+        spectral_centroid=round(analysis.spectral_centroid, 1),
+    )
 
     # --- Stage 3: EQ ---
     audio = apply_eq(audio, INTERNAL_SR, params)
@@ -703,10 +828,50 @@ def master_audio(
     # --- Stage 5: Stereo Widening ---
     audio = apply_stereo_widening(audio, INTERNAL_SR, params)
 
-    # --- Stage 6: Limiting ---
+    # --- Stage 6: Groove Enhancement ---
+    audio = apply_groove_enhancement(audio, INTERNAL_SR, analysis, genre=genre)
+
+    # --- Stage 7: Life Injection ---
+    audio = apply_life_injection(audio, INTERNAL_SR, genre=genre)
+
+    # --- Stage 8: Limiting ---
     audio = apply_limiter(audio, INTERNAL_SR, params.loudness)
 
-    # --- Stage 7: Output Preparation ---
+    # --- Stage 9: Evaluation & Adjustment (max 2 re-runs) ---
+    for iteration in range(2):
+        passed, eval_lufs, eval_tp, eval_centroid = _evaluate_output(
+            audio, INTERNAL_SR, params.loudness, analysis.spectral_centroid,
+        )
+        if passed:
+            logger.info(
+                "master_evaluation_passed",
+                session_id=session_id,
+                stage="evaluation",
+                iteration=iteration,
+                output_lufs=round(eval_lufs, 1),
+                spectral_centroid=round(eval_centroid, 1),
+            )
+            break
+
+        logger.warning(
+            "master_evaluation_failed",
+            session_id=session_id,
+            stage="evaluation",
+            iteration=iteration,
+            output_lufs=round(eval_lufs, 1),
+            target_lufs=params.loudness,
+            lufs_delta=round(eval_lufs - params.loudness, 2),
+            spectral_centroid=round(eval_centroid, 1),
+            input_centroid=round(analysis.spectral_centroid, 1),
+            centroid_delta=round(eval_centroid - analysis.spectral_centroid, 1),
+        )
+
+        # Adjust: re-limit with corrected target to compensate for drift
+        lufs_correction = params.loudness - eval_lufs
+        adjusted_target = params.loudness + lufs_correction * 0.5
+        audio = apply_limiter(audio, INTERNAL_SR, adjusted_target)
+
+    # --- Stage 10: Output Preparation ---
     # Build output filenames
     title = metadata.get("title", "Untitled")
     artist = metadata.get("artist", "Unknown Artist")
@@ -720,7 +885,7 @@ def master_audio(
     export_wav(audio, INTERNAL_SR, wav_path)
     export_mp3(audio, INTERNAL_SR, mp3_path)
 
-    # Post-export analysis
+    # Post-export measurements
     meter = pyln.Meter(INTERNAL_SR)
     output_lufs = meter.integrated_loudness(audio)
     if np.isinf(output_lufs) or np.isnan(output_lufs):
@@ -729,6 +894,16 @@ def master_audio(
     output_dr = compute_crest_factor(audio)
     output_sw = compute_stereo_width(audio)
     output_sc = compute_spectral_centroid(audio, INTERNAL_SR)
+
+    logger.info(
+        "master_complete",
+        session_id=session_id,
+        stage="output",
+        output_lufs=round(output_lufs, 1),
+        output_true_peak=round(output_tp, 1),
+        output_stereo_width=round(output_sw, 3),
+        genre=genre,
+    )
 
     return MasterResult(
         output_wav_path=wav_path,
