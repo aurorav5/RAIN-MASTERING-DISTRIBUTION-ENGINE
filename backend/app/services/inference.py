@@ -85,7 +85,9 @@ def _decode_params(raw: np.ndarray) -> dict:
 
     # SAIL
     sail_enabled = bool(_sigmoid(raw[31]) > 0.5)
-    sail_stem_gains = [float(np.tanh(raw[32 + i]) * 3.0) for i in range(6)]
+    # Model outputs 6 sail gains at [32-37]; pad to 12 for SAIL v2 (12-stem era).
+    # Slots 6-11 are populated from separation output when available, else 0.0.
+    sail_stem_gains = [float(np.tanh(raw[32 + i]) * 3.0) for i in range(6)] + [0.0] * 6
 
     # Vinyl mode
     vinyl_mode = bool(_sigmoid(raw[38]) > 0.5)

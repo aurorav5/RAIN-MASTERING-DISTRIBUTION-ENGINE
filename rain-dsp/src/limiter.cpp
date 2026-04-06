@@ -354,7 +354,7 @@ ProcessResult SAILLimiter::processBlock(
     }
 
     // Apply per-stem gain adjustments before limiting.
-    // sail_stem_gains[6] maps to the first 6 stems in the envelope list.
+    // sail_stem_gains[12] maps to the 12 stems in the envelope list.
     // These are additive dB gains applied to the mix contribution weights.
     // (In a full stem-aware pipeline, these would be applied to individual
     // stem buffers before summing. Here we adjust the stem envelope weights

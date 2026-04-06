@@ -150,9 +150,9 @@ static rain::ProcessingParams parse_params(const char* json) {
 
     p.sail_enabled       = json_get_bool(json,   "sail_enabled",       p.sail_enabled);
     {
-        double sg[6] = {0,0,0,0,0,0};
-        json_get_double_array(json, "sail_stem_gains", sg, 6, 0.0);
-        for (int i = 0; i < 6; ++i) p.sail_stem_gains[i] = sg[i];
+        double sg[12] = {0,0,0,0,0,0,0,0,0,0,0,0};
+        json_get_double_array(json, "sail_stem_gains", sg, 12, 0.0);
+        for (int i = 0; i < 12; ++i) p.sail_stem_gains[i] = sg[i];
     }
 
     return p;

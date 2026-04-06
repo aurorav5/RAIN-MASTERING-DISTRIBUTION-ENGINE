@@ -84,7 +84,7 @@ BASE_PARAMS: dict = {
     # Mid/Side
     "ms_enabled": False, "mid_gain": 0.0, "side_gain": 0.0, "stereo_width": 1.0,
     # SAIL
-    "sail_enabled": False, "sail_stem_gains": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    "sail_enabled": False, "sail_stem_gains": [0.0] * 12,  # float[12] — 12-stem SAIL v2
     # Vinyl
     "vinyl_mode": False,
     # Macro controls

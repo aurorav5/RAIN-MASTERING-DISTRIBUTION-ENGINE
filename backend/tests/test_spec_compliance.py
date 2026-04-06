@@ -53,22 +53,22 @@ def test_kweight_sign():
     assert abs(gain_db - 4.0) < 0.1, f"K-weight shelf gain at 10kHz = {gain_db:.4f} dB, expected +4.0 dB ±0.1"
 
 
-# --- Rule #6: sail_stem_gains is float[6], NOT float[5] ---
+# --- Rule #6: sail_stem_gains is float[12] (12-stem SAIL v2) ---
 
 def test_sail_stem_gains_length():
-    """sail_stem_gains must be float[6] per canonical schema."""
+    """sail_stem_gains must be float[12] per canonical schema (CLAUDE.md)."""
     from app.services.heuristic_params import default_params
 
     params = default_params()
     assert "sail_stem_gains" in params, "sail_stem_gains missing from ProcessingParams"
     assert isinstance(params["sail_stem_gains"], list), "sail_stem_gains must be a list"
-    assert len(params["sail_stem_gains"]) == 6, (
-        f"sail_stem_gains must be float[6], got float[{len(params['sail_stem_gains'])}]"
+    assert len(params["sail_stem_gains"]) == 12, (
+        f"sail_stem_gains must be float[12], got float[{len(params['sail_stem_gains'])}]"
     )
 
 
 def test_sail_stem_gains_all_genres():
-    """Verify sail_stem_gains is float[6] across all genre/platform combos."""
+    """Verify sail_stem_gains is float[12] across all genre/platform combos."""
     from app.services.heuristic_params import generate_heuristic_params
 
     genres = ["electronic", "hiphop", "rock", "pop", "classical", "jazz", "default"]
@@ -77,8 +77,8 @@ def test_sail_stem_gains_all_genres():
     for genre in genres:
         for platform in platforms:
             params = generate_heuristic_params(genre, platform)
-            assert len(params["sail_stem_gains"]) == 6, (
-                f"sail_stem_gains length for {genre}/{platform} = {len(params['sail_stem_gains'])}, expected 6"
+            assert len(params["sail_stem_gains"]) == 12, (
+                f"sail_stem_gains length for {genre}/{platform} = {len(params['sail_stem_gains'])}, expected 12"
             )
 
 

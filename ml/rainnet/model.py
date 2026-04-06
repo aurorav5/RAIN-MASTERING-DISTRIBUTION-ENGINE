@@ -151,7 +151,9 @@ class RainNetV2(nn.Module):
 
         # --- SAIL (7 params) ---
         sail_enabled = bool(torch.sigmoid(p[31]).item() > 0.5)
-        sail_stem_gains = [float(torch.tanh(p[32 + i]) * 3.0) for i in range(6)]
+        # Model predicts 6 primary stem gains at [32-37]; padded to 12 for SAIL v2.
+        # Slots 6-11 populated from separation output when available.
+        sail_stem_gains = [float(torch.tanh(p[32 + i]) * 3.0) for i in range(6)] + [0.0] * 6
 
         # --- Vinyl mode (1 param) ---
         vinyl_mode = bool(torch.sigmoid(p[38]).item() > 0.5)

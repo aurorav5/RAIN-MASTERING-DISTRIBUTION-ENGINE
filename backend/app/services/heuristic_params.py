@@ -53,7 +53,7 @@ def default_params() -> dict[str, Any]:
 
         # SAIL (Stem-Aware Intelligent Limiting)
         "sail_enabled": False,
-        "sail_stem_gains": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # float[6] — model output dim
+        "sail_stem_gains": [0.0] * 12,  # float[12] — 12-stem SAIL v2
 
         # Vinyl mode
         "vinyl_mode": False,
@@ -218,8 +218,8 @@ def validate_processing_params(params: dict[str, Any]) -> list[str]:
 
     if "sail_stem_gains" in params:
         sg = params["sail_stem_gains"]
-        if not isinstance(sg, list) or len(sg) not in (6, 12):
-            errors.append(f"sail_stem_gains must be float[6] or float[12], got length {len(sg) if isinstance(sg, list) else type(sg)}")
+        if not isinstance(sg, list) or len(sg) != 12:
+            errors.append(f"sail_stem_gains must be float[12], got length {len(sg) if isinstance(sg, list) else type(sg)}")
 
     # Validate 7 macros if present (all must be in [0.0, 10.0])
     for macro_name in ("macro_brighten", "macro_glue", "macro_width", "macro_punch",

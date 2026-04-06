@@ -18,7 +18,7 @@ ProcessingParams schema (CLAUDE.md). Index layout matches model.py decode_params
     [29]      side_gain                tanh*6
     [30]      stereo_width             sigmoid*2
     [31]      sail_enabled             sigmoid -> bool
-    [32-37]   sail_stem_gains[6]       tanh*3
+    [32-37]   sail_stem_gains[0:6]     tanh*3 (model outputs 6, padded to 12 in decode)
     [38]      vinyl_mode               sigmoid -> bool
     [39-45]   macros[7]                sigmoid*10
 """
@@ -113,9 +113,11 @@ class RainNetDataset(Dataset):
             pv[31] = 1.0 if params.get("sail_enabled", False) else 0.0
 
             # [32-37] SAIL stem gains (6 from model output)
-            sg = params.get("sail_stem_gains", [0.0] * 6)
+            # Model uses 6 neurons for sail at [32-37]; remaining 6 stems are
+            # populated from separation output in production (not predicted by RainNet).
+            sg = params.get("sail_stem_gains", [0.0] * 12)
             for j in range(min(6, len(sg))):
-                pv[32 + j] = sg[j]
+                pv[32 + j] = sg[j]  # only first 6 are model-predicted
 
             # [38] Vinyl mode
             pv[38] = 1.0 if params.get("vinyl_mode", False) else 0.0
