@@ -9,6 +9,7 @@ x-backend-env: &backend-env
   JWT_PRIVATE_KEY_PATH: /etc/rain/jwt.key
   RAIN_CERT_SIGNING_KEY_PATH: /etc/rain/cert.key
   RAIN_WATERMARK_KEY_PATH: /etc/rain/jwt.key
+  ONNX_MODEL_PATH: "/models/rain_base.onnx"
   FRONTEND_URL: "http://localhost:5173,http://localhost:5174,http://localhost:4173"
   # Admin seed (picked up by migration 0005 / scripts/seed_admin_user.py)
   RAIN_ADMIN_EMAIL: "${RAIN_ADMIN_EMAIL:-philippusbolke@gmail.com}"
@@ -127,6 +128,7 @@ services:
     volumes:
       - ./backend:/app
       - ./keys:/etc/rain:ro
+      - ./models:/models:ro
     env_file: .env
     environment: *backend-env
     ports:
@@ -157,6 +159,7 @@ services:
     volumes:
       - ./backend:/app
       - ./keys:/etc/rain:ro
+      - ./models:/models:ro
     env_file: .env
     environment: *backend-env
     networks:
