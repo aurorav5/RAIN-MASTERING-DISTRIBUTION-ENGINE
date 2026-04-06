@@ -149,6 +149,7 @@ def generate_ddex_ern43(
     ai_disclosure: Optional[AIDisclosure] = None,
     explicit: bool = False,
     label_name: str = "ARCOVEL RAIN Distribution",
+    ai_involvement: dict[str, bool] | None = None,
 ) -> str:
     """Generate DDEX ERN 4.3 compliant XML string for DSP delivery.
 
@@ -188,6 +189,38 @@ def generate_ddex_ern43(
     # Sept 2025 DDEX AI Disclosure — emit only if provided
     if ai_disclosure is not None:
         _emit_ai_disclosure(details, ai_disclosure)
+
+    # DDEX ERN 4.3 AI Involvement per September 2025 standard
+    # RAIN mastering always constitutes post_production AI involvement
+    effective_ai_involvement: dict[str, bool] = {"post_production": True}
+    if ai_involvement:
+        effective_ai_involvement.update(ai_involvement)
+
+    ai_inv_block = SubElement(details, "AIInvolvementDescription")
+    SubElement(ai_inv_block, "AIInvolvementType").text = "PostProduction"
+    SubElement(ai_inv_block, "AITool").text = "RAIN v6.0.0 by ARCOVEL Technologies International"
+    SubElement(ai_inv_block, "AIInvolvementCategory").text = "Mastering"
+    SubElement(ai_inv_block, "AIInvolvementDisclosure").text = "true"
+    SubElement(ai_inv_block, "AIInvolvementVocals").text = (
+        "true" if effective_ai_involvement.get("vocals") else "false"
+    )
+    SubElement(ai_inv_block, "AIInvolvementInstrumentation").text = (
+        "true" if effective_ai_involvement.get("instrumentation") else "false"
+    )
+    SubElement(ai_inv_block, "AIInvolvementComposition").text = (
+        "true" if effective_ai_involvement.get("composition") else "false"
+    )
+    SubElement(ai_inv_block, "AIInvolvementLyrics").text = (
+        "true" if effective_ai_involvement.get("lyrics") else "false"
+    )
+
+    # EU AI Act Article 50 compliance disclosure
+    eu_ai_act = SubElement(details, "AdditionalInformation")
+    SubElement(eu_ai_act, "Type").text = "EUAIActCompliant"
+    SubElement(eu_ai_act, "Value").text = "true"
+    SubElement(eu_ai_act, "Description").text = (
+        "Article 50 — AI-generated/processed audio disclosure"
+    )
 
     # TechnicalSoundRecordingDetails
     tech_details = SubElement(sr, "TechnicalSoundRecordingDetails")

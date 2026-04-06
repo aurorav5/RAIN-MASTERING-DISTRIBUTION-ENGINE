@@ -11,42 +11,139 @@ import structlog
 logger = structlog.get_logger()
 
 
+_SATURATION_MODES: list[str] = ["tape", "tube", "transistor"]
+
+
 def _sigmoid(x: np.ndarray) -> np.ndarray:
-    return 1.0 / (1.0 + np.exp(-x))
+    return 1.0 / (1.0 + np.exp(-np.clip(x, -88.0, 88.0)))
 
 
 def _softplus(x: np.ndarray) -> np.ndarray:
-    return np.log1p(np.exp(x))
+    return np.log1p(np.exp(np.clip(x, -88.0, 88.0)))
 
 
 def _decode_params(raw: np.ndarray) -> dict:
-    """Convert raw ONNX output vector to ProcessingParams dict."""
+    """
+    Convert raw ONNX output vector (46 neurons) to ProcessingParams dict.
+    Layout mirrors RainNetV2.decode_params() in ml/rainnet/model.py exactly.
+
+    Raw output layout (46 neurons):
+        [0]       target_lufs                  -- sigmoid -> [-24.0, -8.0]
+        [1]       true_peak_ceiling            -- sigmoid -> [-6.0, 0.0]
+        [2-4]     mb_threshold_low/mid/high    -- sigmoid -> [-40.0, 0.0]
+        [5-7]     mb_ratio_low/mid/high        -- softplus+1 -> [1.0, 20.0]
+        [8-10]    mb_attack_low/mid/high       -- softplus -> ms
+        [11-13]   mb_release_low/mid/high      -- softplus*10 -> ms
+        [14-21]   eq_gains[0..7]               -- tanh*12 -> [-12.0, +12.0] dB
+        [22]      analog_saturation            -- sigmoid -> bool threshold 0.5
+        [23]      saturation_drive             -- sigmoid -> [0.0, 1.0]
+        [24-26]   saturation_mode logits       -- argmax -> tape/tube/transistor
+        [27]      ms_enabled                   -- sigmoid -> bool threshold 0.5
+        [28]      mid_gain                     -- tanh*6 -> [-6.0, +6.0] dB
+        [29]      side_gain                    -- tanh*6 -> [-6.0, +6.0] dB
+        [30]      stereo_width                 -- sigmoid*2 -> [0.0, 2.0]
+        [31]      sail_enabled                 -- sigmoid -> bool threshold 0.5
+        [32-37]   sail_stem_gains[0..5]        -- tanh*3 -> [-3.0, +3.0] dB
+        [38]      vinyl_mode                   -- sigmoid -> bool threshold 0.5
+        [39-45]   macro controls               -- sigmoid*10 -> [0.0, 10.0]
+    """
+    # Loudness target
+    target_lufs = float(_sigmoid(raw[0]) * 16.0 - 24.0)
+    true_peak_ceiling = float(_sigmoid(raw[1]) * 6.0 - 6.0)
+
+    # Multiband dynamics
+    mb_threshold_low = float(_sigmoid(raw[2]) * -40.0)
+    mb_threshold_mid = float(_sigmoid(raw[3]) * -40.0)
+    mb_threshold_high = float(_sigmoid(raw[4]) * -40.0)
+
+    mb_ratio_low = float(np.clip(_softplus(raw[5]) + 1.0, 1.0, 20.0))
+    mb_ratio_mid = float(np.clip(_softplus(raw[6]) + 1.0, 1.0, 20.0))
+    mb_ratio_high = float(np.clip(_softplus(raw[7]) + 1.0, 1.0, 20.0))
+
+    mb_attack_low = float(np.clip(_softplus(raw[8]), 0.1, 100.0))
+    mb_attack_mid = float(np.clip(_softplus(raw[9]), 0.1, 100.0))
+    mb_attack_high = float(np.clip(_softplus(raw[10]), 0.1, 100.0))
+
+    mb_release_low = float(np.clip(_softplus(raw[11]) * 10.0, 1.0, 500.0))
+    mb_release_mid = float(np.clip(_softplus(raw[12]) * 10.0, 1.0, 500.0))
+    mb_release_high = float(np.clip(_softplus(raw[13]) * 10.0, 1.0, 500.0))
+
+    # EQ gains (8 bands)
+    eq_gains = [float(np.tanh(raw[14 + i]) * 12.0) for i in range(8)]
+
+    # Analog saturation
+    analog_saturation = bool(_sigmoid(raw[22]) > 0.5)
+    saturation_drive = float(_sigmoid(raw[23]))
+    sat_logits = raw[24:27]
+    saturation_mode = _SATURATION_MODES[int(np.argmax(sat_logits))]
+
+    # Mid/Side processing
+    ms_enabled = bool(_sigmoid(raw[27]) > 0.5)
+    mid_gain = float(np.tanh(raw[28]) * 6.0)
+    side_gain = float(np.tanh(raw[29]) * 6.0)
+    stereo_width = float(_sigmoid(raw[30]) * 2.0)
+
+    # SAIL
+    sail_enabled = bool(_sigmoid(raw[31]) > 0.5)
+    sail_stem_gains = [float(np.tanh(raw[32 + i]) * 3.0) for i in range(6)]
+
+    # Vinyl mode
+    vinyl_mode = bool(_sigmoid(raw[38]) > 0.5)
+
+    # Override true_peak_ceiling for vinyl safety
+    if vinyl_mode:
+        true_peak_ceiling = min(true_peak_ceiling, -3.0)
+
+    # Macro controls
+    macro_brighten = float(_sigmoid(raw[39]) * 10.0)
+    macro_glue = float(_sigmoid(raw[40]) * 10.0)
+    macro_width = float(_sigmoid(raw[41]) * 10.0)
+    macro_punch = float(_sigmoid(raw[42]) * 10.0)
+    macro_warmth = float(_sigmoid(raw[43]) * 10.0)
+    macro_space = float(_sigmoid(raw[44]) * 10.0)
+    macro_repair = float(_sigmoid(raw[45]) * 10.0)
+
     return {
-        "mb_threshold_low":  float(_sigmoid(raw[0]) * -40),
-        "mb_threshold_mid":  float(_sigmoid(raw[1]) * -40),
-        "mb_threshold_high": float(_sigmoid(raw[2]) * -40),
-        "mb_ratio_low":      float(_softplus(raw[3]) + 1.0),
-        "mb_ratio_mid":      float(_softplus(raw[4]) + 1.0),
-        "mb_ratio_high":     float(_softplus(raw[5]) + 1.0),
-        "mb_attack_low":     float(_softplus(raw[6])),
-        "mb_attack_mid":     float(_softplus(raw[7])),
-        "mb_attack_high":    float(_softplus(raw[8])),
-        "mb_release_low":    float(_softplus(raw[9]) * 10),
-        "mb_release_mid":    float(_softplus(raw[10]) * 10),
-        "mb_release_high":   float(_softplus(raw[11]) * 10),
-        "eq_gains":          [float(np.tanh(raw[12 + i]) * 12) for i in range(8)],
-        "analog_saturation": bool(_sigmoid(raw[20]) > 0.5),
-        "saturation_drive":  float(_sigmoid(raw[21])),
-        "saturation_mode":   "tape",
-        "ms_enabled":        bool(_sigmoid(raw[22]) > 0.5),
-        "mid_gain":          float(np.tanh(raw[23]) * 6),
-        "side_gain":         float(np.tanh(raw[24]) * 6),
-        "stereo_width":      float(_sigmoid(raw[25]) * 2),
-        "sail_enabled":      bool(_sigmoid(raw[26]) > 0.5),
-        "sail_stem_gains":   [float(np.tanh(raw[27 + i]) * 3) for i in range(5)] + [0.0],
-        "target_lufs":       -14.0,   # set by caller based on platform
-        "true_peak_ceiling": -1.0,    # set by caller based on platform
-        "vinyl_mode":        False,
+        # Loudness target
+        "target_lufs": target_lufs,
+        "true_peak_ceiling": true_peak_ceiling,
+        # Multiband dynamics
+        "mb_threshold_low": mb_threshold_low,
+        "mb_threshold_mid": mb_threshold_mid,
+        "mb_threshold_high": mb_threshold_high,
+        "mb_ratio_low": mb_ratio_low,
+        "mb_ratio_mid": mb_ratio_mid,
+        "mb_ratio_high": mb_ratio_high,
+        "mb_attack_low": mb_attack_low,
+        "mb_attack_mid": mb_attack_mid,
+        "mb_attack_high": mb_attack_high,
+        "mb_release_low": mb_release_low,
+        "mb_release_mid": mb_release_mid,
+        "mb_release_high": mb_release_high,
+        # EQ
+        "eq_gains": eq_gains,
+        # Analog saturation
+        "analog_saturation": analog_saturation,
+        "saturation_drive": saturation_drive,
+        "saturation_mode": saturation_mode,
+        # Mid/Side
+        "ms_enabled": ms_enabled,
+        "mid_gain": mid_gain,
+        "side_gain": side_gain,
+        "stereo_width": stereo_width,
+        # SAIL
+        "sail_enabled": sail_enabled,
+        "sail_stem_gains": sail_stem_gains,
+        # Vinyl
+        "vinyl_mode": vinyl_mode,
+        # Macro controls
+        "macro_brighten": macro_brighten,
+        "macro_glue": macro_glue,
+        "macro_width": macro_width,
+        "macro_punch": macro_punch,
+        "macro_warmth": macro_warmth,
+        "macro_space": macro_space,
+        "macro_repair": macro_repair,
     }
 
 

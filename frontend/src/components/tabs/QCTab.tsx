@@ -1,24 +1,25 @@
+import { useState, useEffect } from 'react'
 import { useSessionStore } from '@/stores/session'
+import { api } from '@/utils/api'
+import type { QCReportData, QCCheckData } from '@/utils/api'
+import { CheckCircle, XCircle, AlertTriangle, Wrench, Shield } from 'lucide-react'
 
-const PLATFORMS = [
-  { name: 'Spotify', target: -14.0, ceiling: -1.0 },
-  { name: 'Apple Music', target: -16.0, ceiling: -1.0 },
-  { name: 'YouTube', target: -14.0, ceiling: -1.0 },
-  { name: 'Tidal', target: -14.0, ceiling: -1.0 },
-  { name: 'Amazon Music', target: -14.0, ceiling: -1.0 },
-  { name: 'Deezer', target: -15.0, ceiling: -1.0 },
-] as const
-
-const CODEC_CHECKS = [
-  { codec: 'AAC 256k', penalty: 0.0, status: 'pass' },
-  { codec: 'OGG 320k', penalty: 0.0, status: 'pass' },
-  { codec: 'MP3 320k', penalty: -0.1, status: 'pass' },
-  { codec: 'MP3 128k', penalty: -0.4, status: 'warn' },
-  { codec: 'Opus 128k', penalty: -0.2, status: 'pass' },
-] as const
+const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'advisory'] as const
 
 export default function QCTab() {
-  const { rainScore, outputLufs, outputTruePeak } = useSessionStore()
+  const { rainScore, outputLufs, outputTruePeak, status, sessionId } = useSessionStore()
+  const [qcReport, setQcReport] = useState<QCReportData | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  // Auto-fetch QC when mastering is complete
+  useEffect(() => {
+    if (status !== 'complete' || !sessionId) return
+    setLoading(true)
+    api.master.qcReport(sessionId)
+      .then(setQcReport)
+      .catch(() => setQcReport(null))
+      .finally(() => setLoading(false))
+  }, [status, sessionId])
 
   const overallScore = rainScore?.overall ?? null
 
@@ -27,23 +28,16 @@ export default function QCTab() {
       {/* RAIN Score overview */}
       <div className="panel-card">
         <div className="panel-card-header">
-          <span className="text-[10px] font-mono tracking-widest text-rain-text">
-            RAIN SCORE
-          </span>
+          <span className="text-[10px] font-mono tracking-widest text-rain-text">RAIN SCORE</span>
         </div>
         <div className="panel-card-body">
           <div className="flex items-center gap-6">
-            {/* Score circle */}
             <div className="w-20 h-20 rounded-full border-2 border-rain-purple flex items-center justify-center shrink-0 relative">
               <span className="text-2xl font-mono font-black text-rain-text">
                 {overallScore !== null ? overallScore.toFixed(0) : '--'}
               </span>
-              <span className="absolute -bottom-3 text-[8px] font-mono text-rain-dim">
-                / 100
-              </span>
+              <span className="absolute -bottom-3 text-[8px] font-mono text-rain-dim">/ 100</span>
             </div>
-
-            {/* Measurements */}
             <div className="flex-1 grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <span className="text-[9px] font-mono text-rain-dim">OUTPUT LUFS</span>
@@ -62,84 +56,114 @@ export default function QCTab() {
         </div>
       </div>
 
-      {/* Platform compliance table */}
+      {/* 18 QC Checks — live from backend */}
       <div className="panel-card">
-        <div className="panel-card-header">
+        <div className="panel-card-header justify-between">
           <span className="text-[10px] font-mono tracking-widest text-rain-text">
-            PLATFORM COMPLIANCE
+            18 AUTOMATED QC CHECKS
           </span>
+          {qcReport && (
+            <span className={`text-[9px] font-mono font-bold ${qcReport.passed ? 'text-rain-green' : 'text-rain-red'}`}>
+              {qcReport.passed ? 'ALL PASSED' : `${qcReport.critical_failures} CRITICAL FAILURE${qcReport.critical_failures > 1 ? 'S' : ''}`}
+            </span>
+          )}
         </div>
         <div className="panel-card-body">
-          <table className="w-full text-[10px] font-mono">
-            <thead>
-              <tr className="text-rain-dim border-b border-rain-border">
-                <th className="text-left py-1.5 font-normal tracking-wider">PLATFORM</th>
-                <th className="text-right py-1.5 font-normal tracking-wider">TARGET</th>
-                <th className="text-right py-1.5 font-normal tracking-wider">CEILING</th>
-                <th className="text-right py-1.5 font-normal tracking-wider">SCORE</th>
-                <th className="text-center py-1.5 font-normal tracking-wider">STATUS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {PLATFORMS.map(({ name, target, ceiling }) => {
-                const scores = rainScore as unknown as Record<string, number>
-                const score = scores
-                  ? scores[name.toLowerCase().replace(' ', '_')] ?? null
-                  : null
-                const passed = score !== null && score >= 80
-                return (
-                  <tr key={name} className="border-b border-rain-border/50 text-rain-text">
-                    <td className="py-1.5">{name}</td>
-                    <td className="text-right tabular-nums">{target.toFixed(1)} LU</td>
-                    <td className="text-right tabular-nums">{ceiling.toFixed(1)} dBTP</td>
-                    <td className="text-right tabular-nums">{score !== null ? score.toFixed(0) : '--'}</td>
-                    <td className="text-center">
-                      <span className={`inline-block w-2 h-2 rounded-full ${
-                        score === null ? 'bg-rain-muted' : passed ? 'bg-rain-lime' : 'bg-red-500'
-                      }`} />
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+          {loading && (
+            <div className="flex items-center justify-center py-4 gap-2">
+              <div className="w-4 h-4 border-2 border-rain-teal border-t-transparent rounded-full animate-spin" />
+              <span className="text-[10px] font-mono text-rain-dim">Running QC checks...</span>
+            </div>
+          )}
 
-      {/* Codec penalty table */}
-      <div className="panel-card">
-        <div className="panel-card-header">
-          <span className="text-[10px] font-mono tracking-widest text-rain-text">
-            CODEC PENALTY CHECK
-          </span>
-        </div>
-        <div className="panel-card-body">
-          <table className="w-full text-[10px] font-mono">
-            <thead>
-              <tr className="text-rain-dim border-b border-rain-border">
-                <th className="text-left py-1.5 font-normal tracking-wider">CODEC</th>
-                <th className="text-right py-1.5 font-normal tracking-wider">PENALTY</th>
-                <th className="text-center py-1.5 font-normal tracking-wider">STATUS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {CODEC_CHECKS.map(({ codec, penalty, status }) => (
-                <tr key={codec} className="border-b border-rain-border/50 text-rain-text">
-                  <td className="py-1.5">{codec}</td>
-                  <td className="text-right tabular-nums">{penalty.toFixed(1)} dB</td>
-                  <td className="text-center">
-                    <span className={`px-1.5 py-0.5 rounded text-[8px] tracking-wider ${
-                      status === 'pass'
-                        ? 'bg-green-500/20 text-green-400'
-                        : 'bg-yellow-500/20 text-yellow-400'
-                    }`}>
-                      {status.toUpperCase()}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {!qcReport && !loading && (
+            <div className="text-center py-6">
+              <Shield size={24} className="mx-auto text-rain-muted mb-2" />
+              <p className="text-[10px] font-mono text-rain-dim">Master a track to run QC checks</p>
+            </div>
+          )}
+
+          {qcReport && (
+            <div className="space-y-0.5">
+              {/* Summary bar */}
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex-1 h-1.5 bg-rain-panel rounded overflow-hidden flex">
+                  {qcReport.checks.map((c, i) => (
+                    <div
+                      key={i}
+                      className="h-full"
+                      style={{
+                        width: `${100 / 18}%`,
+                        backgroundColor: c.passed
+                          ? c.auto_remediated ? '#FFB347' : '#4AFF8A'
+                          : '#FF4444',
+                      }}
+                    />
+                  ))}
+                </div>
+                <span className="text-[9px] font-mono text-rain-dim shrink-0">
+                  {qcReport.checks.filter(c => c.passed).length}/18
+                </span>
+              </div>
+
+              {/* Individual checks */}
+              <table className="w-full text-[10px] font-mono">
+                <thead>
+                  <tr className="text-rain-dim border-b border-rain-border">
+                    <th className="text-left py-1 font-normal w-5">#</th>
+                    <th className="text-left py-1 font-normal">CHECK</th>
+                    <th className="text-center py-1 font-normal w-16">SEVERITY</th>
+                    <th className="text-right py-1 font-normal w-16">VALUE</th>
+                    <th className="text-center py-1 font-normal w-12">STATUS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {qcReport.checks.map((check) => (
+                    <tr key={check.id} className="border-b border-rain-border/30">
+                      <td className="py-1 text-rain-muted">{check.id}</td>
+                      <td className="py-1 text-rain-text">
+                        {check.name}
+                        {check.detail && (
+                          <span className="block text-[8px] text-rain-dim mt-0.5">{check.detail}</span>
+                        )}
+                      </td>
+                      <td className="text-center py-1">
+                        <span className={`px-1 py-0.5 rounded text-[8px] uppercase tracking-wider ${
+                          check.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
+                          check.severity === 'high' ? 'bg-orange-500/20 text-orange-400' :
+                          check.severity === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                          check.severity === 'advisory' ? 'bg-blue-500/20 text-blue-400' :
+                          'bg-rain-muted/20 text-rain-dim'
+                        }`}>
+                          {check.severity}
+                        </span>
+                      </td>
+                      <td className="text-right py-1 tabular-nums text-rain-dim">
+                        {check.value !== null ? check.value : '—'}
+                      </td>
+                      <td className="text-center py-1">
+                        {check.auto_remediated ? (
+                          <Wrench size={12} className="inline text-amber-400" />
+                        ) : check.passed ? (
+                          <CheckCircle size={12} className="inline text-rain-green" />
+                        ) : (
+                          <XCircle size={12} className="inline text-rain-red" />
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Remediation summary */}
+              {qcReport.remediated_count > 0 && (
+                <div className="mt-2 px-2 py-1.5 rounded border border-amber-500/30 bg-amber-500/10 text-[9px] font-mono text-amber-400 flex items-center gap-1.5">
+                  <Wrench size={10} />
+                  {qcReport.remediated_count} check{qcReport.remediated_count > 1 ? 's' : ''} auto-remediated
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

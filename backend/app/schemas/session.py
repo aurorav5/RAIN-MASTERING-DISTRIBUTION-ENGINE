@@ -12,6 +12,17 @@ class SessionCreateRequest(BaseModel):
     ai_source: Optional[str] = None  # "suno", "udio", "other"
 
 
+class FreeSessionResponse(BaseModel):
+    """Response for free-tier uploads — no server-side processing."""
+    status: str = "local_only"
+    tier: str = "free"
+    message: str = "Free-tier processing runs locally in WASM. No server-side rendering."
+    file_hash: str
+    target_platform: str
+    genre: Optional[str] = None
+    simple_mode: bool = True
+
+
 class SessionResponse(BaseModel):
     id: UUID
     status: str

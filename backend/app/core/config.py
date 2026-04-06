@@ -1,3 +1,4 @@
+import os
 from pydantic_settings import BaseSettings
 from pydantic import model_validator
 from typing import Literal
@@ -9,7 +10,10 @@ class Settings(BaseSettings):
     RAIN_LOG_LEVEL: str = "debug"
 
     DATABASE_URL: str = "postgresql+asyncpg://rain_app:rain@localhost:5432/rain"
-    REDIS_URL: str = "redis://redis:6379/0"
+    # Canonical name is VALKEY_URL. REDIS_URL accepted for backward compat.
+    VALKEY_URL: str = "redis://valkey:6379/0"
+    # Backward compatibility: accept REDIS_URL env var
+    REDIS_URL: str | None = None
 
     S3_BUCKET: str = "rain-audio"
     S3_ENDPOINT_URL: str = "http://minio:9000"
@@ -62,6 +66,17 @@ class Settings(BaseSettings):
     BSROFORMER_DEVICE: str = "cuda:0"
     SEPARATION_ENABLED: bool = False  # flip on once model is provisioned
 
+    # R6 WASM binary integrity — SHA-256 of deployed rain_dsp.wasm.
+    # When set, every session's wasm_binary_hash must match or RAIN-E304 fires.
+    RAIN_EXPECTED_WASM_HASH: str = os.getenv("RAIN_EXPECTED_WASM_HASH", "")
+
+    @model_validator(mode="after")
+    def _compat_redis_url(self) -> "Settings":
+        """If REDIS_URL is set but VALKEY_URL is at default, use REDIS_URL."""
+        if self.REDIS_URL and self.VALKEY_URL == "redis://valkey:6379/0":
+            self.VALKEY_URL = self.REDIS_URL
+        return self
+
     @model_validator(mode="after")
     def check_production_secrets(self) -> "Settings":
         if self.RAIN_ENV == "production":
@@ -73,6 +88,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 
 settings = Settings()

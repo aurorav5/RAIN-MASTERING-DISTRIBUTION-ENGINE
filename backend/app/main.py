@@ -12,6 +12,7 @@ from app.api.dependencies import get_current_user
 from app.api.routes import (
     auth, upload, billing, sessions, download, aie, distribution,
     suno_import, score, whitelabel, workspaces, lora,
+    master, qc, separate, waitlist,
 )
 
 
@@ -30,7 +31,16 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-_cors_origins = [o.strip() for o in settings.FRONTEND_URL.split(",") if o.strip()]
+# CORS: explicit origins from FRONTEND_URL (comma-separated) + localhost/127.0.0.1 fallbacks
+_cors_origins = list({
+    *[o.strip() for o in settings.FRONTEND_URL.split(",") if o.strip()],
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:3000",
+    "http://localhost:4173",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+})
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
@@ -43,6 +53,7 @@ setup_observability(app)
 
 # Public routes (no auth dependency)
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(waitlist.router, prefix="/api/v1")
 
 # Protected routes — global auth dependency applied at router inclusion.
 # Every endpoint in these routers receives CurrentUser on request.state and
@@ -61,12 +72,20 @@ app.include_router(whitelabel.router, prefix="/api/v1", dependencies=_protected_
 app.include_router(workspaces.router, prefix="/api/v1", dependencies=_protected_deps)
 app.include_router(lora.router, prefix="/api/v1", dependencies=_protected_deps)
 
+# Prototype mastering routes (master_engine + qc_engine + separation from origin/main).
+# WARNING: These routes have NO authentication in this merge state. They use an in-memory
+# session store and are intended for local development only. Before any network-exposed
+# deployment, add Depends(get_current_user) and move the session store to PostgreSQL
+# with user_id scoping + RLS.
+app.include_router(master.router, prefix="/api/v1")
+app.include_router(qc.router, prefix="/api/v1")
+app.include_router(separate.router, prefix="/api/v1")
+
 
 @app.on_event("startup")
 async def set_metrics_on_startup() -> None:
     NORMALIZATION_GATE.set(1.0 if settings.RAIN_NORMALIZATION_VALIDATED else 0.0)
 
 
-@app.get("/health")
-async def health() -> dict:
-    return {"status": "ok", "version": settings.RAIN_VERSION, "env": settings.RAIN_ENV}
+# Health endpoint is owned by observability.py via setup_observability().
+# Do NOT add a duplicate @app.get("/health") here.

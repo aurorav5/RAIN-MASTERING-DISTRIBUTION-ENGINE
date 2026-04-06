@@ -2,7 +2,7 @@ import { useSessionStore } from '@/stores/session'
 import { CheckCircle, Disc3, Wifi, FileText, Shield } from 'lucide-react'
 
 export function StatusFooter() {
-  const { inputBuffer, status, outputBuffer } = useSessionStore()
+  const { inputBuffer, status, outputBuffer, outputLufs } = useSessionStore()
 
   return (
     <div className="shrink-0">
@@ -38,9 +38,10 @@ export function StatusFooter() {
         </div>
 
         <div className="flex items-center gap-4 text-[9px] text-rain-dim font-mono">
-          <span>20 platforms</span>
-          <span>6 distributors</span>
-          <span>100% client-side</span>
+          <span>{status === 'processing' ? 'ENGINE: PROCESSING' : status === 'complete' ? 'ENGINE: IDLE' : 'ENGINE: READY'}</span>
+          <span>48kHz / 24-bit</span>
+          {outputLufs != null && <span>LUFS: {outputLufs.toFixed(1)}</span>}
+          <span className="text-rain-green">CONNECTED</span>
         </div>
       </div>
 
@@ -50,7 +51,7 @@ export function StatusFooter() {
           R&infin;N AI Mastering Engine v6.0 &middot; TheDray Productions / ARCOVEL Technologies International
         </span>
         <span className="text-[9px] text-rain-muted font-mono">
-          International, Centurion, South Africa &middot; Architect: Phil Weyers B&ouml;lke &middot; Built with Claude Opus 4.6
+          International, Centurion, South Africa &middot; Architect: Phil Weyers B&ouml;lke &middot; Built with Claude Sonnet 4.6
         </span>
       </div>
     </div>

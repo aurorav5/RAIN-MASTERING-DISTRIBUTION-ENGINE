@@ -24,13 +24,13 @@ async def _scan_async(session_id: str, user_id: str) -> None:
     from app.core.database import AsyncSessionLocal
     from app.models.session import Session as MasteringSession
     from app.models.content_scan import ContentScan
-    from app.services.storage import get_s3_client
+    from app.services.storage import download_from_s3
     from app.core.config import settings
-    from sqlalchemy import select
+    from sqlalchemy import select, text
     from uuid import UUID, uuid4
 
     async with AsyncSessionLocal() as db:
-        await db.execute(f"SELECT set_app_user_id('{user_id}'::uuid)")
+        await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(user_id)})
         result = await db.execute(
             select(MasteringSession).where(MasteringSession.id == UUID(session_id))
         )
@@ -40,9 +40,7 @@ async def _scan_async(session_id: str, user_id: str) -> None:
             return
 
         try:
-            s3 = get_s3_client()
-            obj = s3.get_object(Bucket=settings.S3_BUCKET, Key=session.input_file_key)
-            audio_data = obj["Body"].read()
+            audio_data = await download_from_s3(session.input_file_key)
         except Exception as e:
             logger.error("content_scan_s3_fail", session_id=session_id, error=str(e), error_code="RAIN-E800")
             return

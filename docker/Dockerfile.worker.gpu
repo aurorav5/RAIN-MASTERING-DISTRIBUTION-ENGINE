@@ -1,0 +1,29 @@
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+
+# System deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.12 python3.12-venv python3-pip \
+    build-essential libpq-dev ffmpeg git curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.12 /usr/bin/python3 \
+    && ln -sf /usr/bin/python3.12 /usr/bin/python
+
+WORKDIR /app
+
+# Python deps (base)
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# GPU-specific deps
+RUN pip install --no-cache-dir \
+    torch==2.5.1+cu124 torchaudio==2.5.1+cu124 --index-url https://download.pytorch.org/whl/cu124 \
+    && pip install --no-cache-dir demucs
+
+# App code
+COPY backend/ .
+
+# Non-root user
+RUN useradd -m -u 1000 rain && chown -R rain:rain /app
+USER rain
+
+CMD ["celery", "-A", "app.worker", "worker", "--loglevel=info", "-Q", "default,demucs,distribution,certification"]

@@ -1,10 +1,9 @@
-version: '3.9'
-
 # Container-internal URLs used by backend/worker. These override the host-oriented
 # values in .env because containers resolve services by hostname, not localhost.
 x-backend-env: &backend-env
   DATABASE_URL: "postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
-  REDIS_URL: "redis://redis:6379/0"
+  VALKEY_URL: "redis://valkey:6379/0"
+  REDIS_URL: "redis://valkey:6379/0"  # legacy compat — points at valkey
   S3_ENDPOINT_URL: "http://minio:9000"
   JWT_PUBLIC_KEY_PATH: /etc/rain/jwt.pub
   JWT_PRIVATE_KEY_PATH: /etc/rain/jwt.key
@@ -19,33 +18,44 @@ x-backend-env: &backend-env
 
 services:
   postgres:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-postgres.sql:/docker-entrypoint-initdb.d/init-postgres.sql:ro
     ports:
       - "5432:5432"
+    networks:
+      - rain-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rain_app -d rain"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rain_app} -d ${POSTGRES_DB:-rain}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
-  redis:
-    image: redis:7-alpine
-    command: redis-server --appendonly yes
+  valkey:
+    image: valkey/valkey:8.1.6-alpine
+    command: >
+      valkey-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
     volumes:
-      - redis_data:/data
+      - valkey_data:/data
     ports:
       - "6379:6379"
+    networks:
+      - rain-net
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   minio:
     image: minio/minio:latest
@@ -58,11 +68,14 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
+    networks:
+      - rain-net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   minio-init:
     image: minio/mc:latest
@@ -72,6 +85,8 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    networks:
+      - rain-net
     entrypoint: >
       /bin/sh -c "
       mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
@@ -91,6 +106,8 @@ services:
       - ./keys:/etc/rain:ro
     env_file: .env
     environment: *backend-env
+    networks:
+      - rain-net
     command: alembic upgrade head
     restart: "no"
 
@@ -101,7 +118,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
+      valkey:
         condition: service_healthy
       minio:
         condition: service_healthy
@@ -114,6 +131,14 @@ services:
     environment: *backend-env
     ports:
       - "8000:8000"
+    networks:
+      - rain-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   worker:
@@ -123,7 +148,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
+      valkey:
         condition: service_healthy
       minio:
         condition: service_healthy
@@ -134,6 +159,8 @@ services:
       - ./keys:/etc/rain:ro
     env_file: .env
     environment: *backend-env
+    networks:
+      - rain-net
     command: celery -A app.worker worker --loglevel=info -Q cpu_standard,gpu_priority_low,gpu_priority_medium,gpu_priority_high,distribution,certification
 
   frontend:
@@ -147,6 +174,8 @@ services:
       VITE_API_URL: "http://localhost:8000/api/v1"
     ports:
       - "5173:5173"
+    networks:
+      - rain-net
     command: npm run dev -- --host 0.0.0.0
 
   prometheus:
@@ -156,6 +185,13 @@ services:
       - prometheus_data:/prometheus
     ports:
       - "9090:9090"
+    networks:
+      - rain-net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=30d'
@@ -165,8 +201,8 @@ services:
   grafana:
     image: grafana/grafana:10.4.0
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: rain_grafana
+      GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD:-rain_grafana}
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana_data:/var/lib/grafana
@@ -174,6 +210,13 @@ services:
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
       - "3000:3000"
+    networks:
+      - rain-net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     depends_on:
       - prometheus
 
@@ -183,18 +226,22 @@ services:
       DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
     ports:
       - "9187:9187"
+    networks:
+      - rain-net
     depends_on:
       postgres:
         condition: service_healthy
 
-  redis-exporter:
+  valkey-exporter:
     image: oliver006/redis_exporter:v1.58.0
     environment:
-      REDIS_ADDR: "redis://redis:6379"
+      REDIS_ADDR: "redis://valkey:6379"
     ports:
       - "9121:9121"
+    networks:
+      - rain-net
     depends_on:
-      redis:
+      valkey:
         condition: service_healthy
 
   nginx:
@@ -204,6 +251,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    networks:
+      - rain-net
     depends_on:
       - backend
       - frontend
@@ -212,7 +261,11 @@ services:
 
 volumes:
   postgres_data:
-  redis_data:
+  valkey_data:
   minio_data:
   prometheus_data:
   grafana_data:
+
+networks:
+  rain-net:
+    driver: bridge

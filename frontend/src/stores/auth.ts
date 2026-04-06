@@ -58,12 +58,9 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      // Bumped to v2 on 2026-04-05 to invalidate the dev-auto-auth shim stored
-      // under the old `rain-auth` key. Old key: `rain-auth` → new: `rain-auth-v2`.
       name: 'rain-auth-v2',
       partialize: (s) => ({
         accessToken: s.accessToken,
-        // refreshToken kept in store for legacy clients only; the real source is the httpOnly cookie
         refreshToken: s.refreshToken,
         tier: s.tier,
         userId: s.userId,

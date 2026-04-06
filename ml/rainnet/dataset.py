@@ -67,8 +67,8 @@ class RainNetDataset(Dataset):
             param_vector[24] = params.get("side_gain", 0.0)
             param_vector[25] = params.get("stereo_width", 1.0)
             param_vector[26] = 1.0 if params.get("sail_enabled", False) else 0.0
-            stem_gains = params.get("sail_stem_gains", [0.0] * 5)
-            for j in range(5):
+            stem_gains = params.get("sail_stem_gains", [0.0] * 6)
+            for j in range(6):
                 param_vector[27 + j] = stem_gains[j] if j < len(stem_gains) else 0.0
 
         return {

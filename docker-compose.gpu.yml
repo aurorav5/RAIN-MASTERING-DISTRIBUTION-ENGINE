@@ -1,0 +1,33 @@
+# ============================================
+# RAIN GPU-Enabled Docker Compose
+# ============================================
+# Use this on machines with NVIDIA GPUs for accelerated ML inference
+# and stem separation (Demucs, RainNet).
+#
+# Requirements:
+#   - NVIDIA GPU with CUDA 12+ support
+#   - NVIDIA Container Toolkit installed
+#   - Docker Engine (not Docker Desktop snap) on Linux
+#   - On Windows: Docker Desktop with WSL2 backend + nvidia-container-toolkit in WSL
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# ============================================
+
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker.gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - DEMUCS_DEVICE=cuda
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+    command: celery -A app.worker worker --loglevel=info -Q default,demucs,distribution,certification -c 2

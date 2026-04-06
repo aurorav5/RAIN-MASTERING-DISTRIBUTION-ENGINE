@@ -1,7 +1,7 @@
 """AIE (Artist Identity Engine) API routes."""
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from uuid import UUID
 from app.core.database import get_db
 from app.api.dependencies import get_current_user, CurrentUser, require_tier
@@ -21,7 +21,7 @@ async def get_aie_profile(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Return current user's AIE profile (session_count, cold_start status)."""
-    await db.execute(f"SELECT set_app_user_id('{current_user.user_id}'::uuid)")
+    await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(current_user.user_id)})
     result = await db.execute(
         select(AIEProfile).where(AIEProfile.user_id == current_user.user_id)
     )
@@ -54,7 +54,7 @@ async def export_aie_profile(
     from app.core.config import settings
     import hmac
 
-    await db.execute(f"SELECT set_app_user_id('{current_user.user_id}'::uuid)")
+    await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(current_user.user_id)})
     result = await db.execute(
         select(AIEProfile).where(AIEProfile.user_id == current_user.user_id)
     )
@@ -111,7 +111,7 @@ async def reference_match(
     data = await file.read()
     mel, duration, sr = extract_mel_spectrogram(data)
 
-    await db.execute(f"SELECT set_app_user_id('{current_user.user_id}'::uuid)")
+    await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(current_user.user_id)})
     result = await db.execute(
         select(AIEProfile).where(AIEProfile.user_id == current_user.user_id)
     )

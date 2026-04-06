@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from uuid import UUID
 from app.core.database import get_db
 from app.api.dependencies import get_current_user, CurrentUser
@@ -18,7 +18,7 @@ async def download_master(
     current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> RedirectResponse:
-    await db.execute(f"SELECT set_app_user_id('{current_user.user_id}'::uuid)")
+    await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(current_user.user_id)})
 
     result = await db.execute(
         select(MasteringSession).where(
@@ -38,5 +38,5 @@ async def download_master(
     # Quota check enforces free tier block (raises 402 for free tier)
     await check_and_increment_downloads(current_user.user_id, current_user.tier, db)
 
-    url = generate_presigned_url(session.output_file_key, expires_seconds=300)
+    url = await generate_presigned_url(session.output_file_key, expires_seconds=300)
     return RedirectResponse(url=url, status_code=302)

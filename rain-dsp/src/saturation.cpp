@@ -1,5 +1,5 @@
 // Analog saturation with 4x oversampling
-// Models: tape, transformer, tube
+// Models: tape, transistor, tube
 // 4x oversampling with 48-tap Kaiser FIR anti-aliasing filter
 // FIR: β=6.0, fc=0.25 (= 0.5/L, L=4 — passband up to original Nyquist)
 // All arithmetic in 64-bit double.
@@ -64,10 +64,10 @@ inline double sat_tape(double x, double drive) {
     return std::tanh(d * x) / denom;
 }
 
-// Transformer saturation: asymmetric
+// Transistor saturation: asymmetric
 // positive: tanh(drive * 3 * x)
 // negative: -atan(drive * 2 * (-x)) * (2/pi)
-inline double sat_transformer(double x, double drive) {
+inline double sat_transistor(double x, double drive) {
     if (drive < 1e-9) return x;
     if (x >= 0.0) {
         return std::tanh(drive * 3.0 * x);
@@ -116,8 +116,8 @@ void saturate_channel(
             double saturated;
             if (mode == "tape") {
                 saturated = sat_tape(filtered, drive);
-            } else if (mode == "transformer") {
-                saturated = sat_transformer(filtered, drive);
+            } else if (mode == "transistor") {
+                saturated = sat_transistor(filtered, drive);
             } else if (mode == "tube") {
                 saturated = sat_tube(filtered, drive);
             } else {

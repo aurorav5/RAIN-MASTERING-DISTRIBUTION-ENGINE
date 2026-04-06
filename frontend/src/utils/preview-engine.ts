@@ -4,6 +4,9 @@ export class PreviewEngine {
   private gainNode: GainNode | null = null
   private analyserNode: AnalyserNode | null = null
   private currentBuffer: AudioBuffer | null = null
+  private playStartContextTime = 0
+  private playStartOffset = 0
+  private _isPlaying = false
 
   async init(): Promise<void> {
     this.context = new AudioContext({ sampleRate: 48000 })
@@ -23,18 +26,49 @@ export class PreviewEngine {
 
   play(startTime = 0): void {
     if (this.context === null || this.currentBuffer === null) return
+    if (this.context.state === 'suspended') void this.context.resume()
     this.stop()
     this.sourceNode = this.context.createBufferSource()
     this.sourceNode.buffer = this.currentBuffer
     this.sourceNode.connect(this.gainNode!)
     this.sourceNode.start(0, startTime)
+    this.playStartContextTime = this.context.currentTime
+    this.playStartOffset = startTime
+    this._isPlaying = true
+    this.sourceNode.onended = () => { this._isPlaying = false }
+  }
+
+  /** Pause playback and return the current position (seconds). */
+  pause(): number {
+    if (!this._isPlaying || this.context === null) return this.playStartOffset
+    const elapsed = this.context.currentTime - this.playStartContextTime
+    const pos = this.playStartOffset + elapsed
+    this.stop()
+    this.playStartOffset = pos
+    return pos
+  }
+
+  /** Resume from where pause() left off. */
+  resume(fromPosition?: number): void {
+    this.play(fromPosition ?? this.playStartOffset)
   }
 
   stop(): void {
     try { this.sourceNode?.stop() } catch { /* already stopped */ }
     this.sourceNode?.disconnect()
     this.sourceNode = null
+    this._isPlaying = false
   }
+
+  get isPlaying(): boolean { return this._isPlaying }
+
+  /** Current playback position in seconds. */
+  get position(): number {
+    if (!this._isPlaying || this.context === null) return this.playStartOffset
+    return this.playStartOffset + (this.context.currentTime - this.playStartContextTime)
+  }
+
+  get duration(): number { return this.currentBuffer?.duration ?? 0 }
 
   setVolume(db: number): void {
     if (this.gainNode !== null) {

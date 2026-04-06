@@ -22,10 +22,12 @@ const MarketTab = lazy(() => import('@/components/tabs/MarketTab'))
 const AnalyticsTab = lazy(() => import('@/components/tabs/AnalyticsTab'))
 const RoadmapTab = lazy(() => import('@/components/tabs/RoadmapTab'))
 const SettingsTab = lazy(() => import('@/components/tabs/SettingsTab'))
-const AIETab = lazy(() => import('@/components/tabs/AIETab').then(m => ({ default: m.AIETab })))
+const AIETab = lazy(() =>
+  import('@/components/tabs/AIETab').then((m) => ({ default: m.AIETab }))
+)
+const DocsTab = lazy(() => import('@/components/tabs/DocsTab'))
 const ReferenceTab = lazy(() => import('@/components/tabs/ReferenceTab'))
 const RepairTab = lazy(() => import('@/components/tabs/RepairTab'))
-const DocsTab = lazy(() => import('@/components/tabs/DocsTab'))
 const TestLabTab = lazy(() => import('@/components/tabs/TestLabTab'))
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -80,9 +82,9 @@ export default function App() {
           <Route path="roadmap" element={<Suspense fallback={<TabFallback />}><RoadmapTab /></Suspense>} />
           <Route path="settings" element={<Suspense fallback={<TabFallback />}><SettingsTab /></Suspense>} />
           <Route path="aie" element={<Suspense fallback={<TabFallback />}><AIETab /></Suspense>} />
+          <Route path="docs" element={<Suspense fallback={<TabFallback />}><DocsTab /></Suspense>} />
           <Route path="reference" element={<Suspense fallback={<TabFallback />}><ReferenceTab /></Suspense>} />
           <Route path="repair" element={<Suspense fallback={<TabFallback />}><RepairTab /></Suspense>} />
-          <Route path="docs" element={<Suspense fallback={<TabFallback />}><DocsTab /></Suspense>} />
           <Route path="testlab" element={<Suspense fallback={<TabFallback />}><TestLabTab /></Suspense>} />
         </Route>
 

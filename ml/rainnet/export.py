@@ -55,7 +55,7 @@ def export_onnx(checkpoint_path: str = "", output_path: str = "../../models/rain
         "platform_id":  dummy_platform.numpy(),
         "simple_mode":  dummy_mode.numpy(),
     })
-    assert out[0].shape == (1, 32), f"Unexpected output shape: {out[0].shape}"
+    assert out[0].shape == (1, 46), f"Unexpected output shape: {out[0].shape}"
     print(f"ONNX validation OK. Output shape: {out[0].shape}")
     return output_path
 
