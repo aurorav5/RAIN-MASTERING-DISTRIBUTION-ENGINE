@@ -320,12 +320,15 @@ without explicit conditional logic defined in the spec:
 4. Parameter validation  → All fields present, all values in range, schema conforms
 5. DSP processing        → RainDSP (WASM or native) with validated ProcessingParams
 6. Output verification   → Measure output LUFS + true peak, verify ±0.5 LU of target
-7. Session completion    → Persist output (paid) or hold in memory (free)
-8. Background tasks      → Content scan, AIE update, RAIN-CERT (async, non-blocking)
+7. Provenance gate       → Create + sign RAIN-CERT synchronously, verify output hash (RAIN-E305/E306)
+8. Session completion    → Persist output + signed cert (paid) or hold in memory (free)
+9. Background tasks      → Content scan, AIE update, C2PA embed, AudioSeal watermark (async)
 ```
 
-Steps 1–7 are the critical path. Step 8 runs asynchronously after completion.
-Failure in step 8 must NEVER invalidate a completed session.
+Steps 1–8 are the critical path. Step 9 runs asynchronously after completion.
+Failure in step 9 must NEVER invalidate a completed session.
+The provenance gate (step 7) is SYNCHRONOUS and BLOCKING — hash mismatch or
+signature failure rejects the output with RAIN-E305/E306.
 
 ---
 

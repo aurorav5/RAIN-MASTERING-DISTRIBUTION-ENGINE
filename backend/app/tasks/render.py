@@ -87,6 +87,37 @@ async def _render_session_async(
 
             rain_score = await compute_rain_score(output_audio, session.target_platform or "spotify", mel)
 
+            # ── PROVENANCE ENFORCEMENT GATE (synchronous — before marking complete) ──
+            # Every master that exits the pipeline MUST have a signed RAIN-CERT.
+            # Hash mismatch → RAIN-E305, signature failure → RAIN-E306.
+            from app.services.provenance_pipeline import (
+                create_rain_cert, sign_and_verify, cert_to_dict,
+            )
+
+            model_ver = settings.RAIN_VERSION if source == "rainnet" else "heuristic"
+            cert = create_rain_cert(
+                session_id=session_id,
+                input_hash=session.input_file_hash or "",
+                output_hash=output_hash,
+                output_audio=output_audio,
+                processing_params=params,
+                wasm_binary_hash=session.wasm_binary_hash or "",
+                model_version=model_ver,
+                ai_generated=session.ai_generated,
+                ai_source=session.ai_source or "",
+                duration_ms=float(duration_ms),
+            )
+            cert = sign_and_verify(cert)
+            cert_dict = cert_to_dict(cert)
+
+            logger.info(
+                "provenance_gate_passed",
+                session_id=session_id,
+                cert_id=str(cert.cert_id),
+                stage="render",
+                user_id=user_id,
+            )
+
             await db.execute(
                 update(MasteringSession)
                 .where(MasteringSession.id == UUID(session_id))
@@ -98,12 +129,14 @@ async def _render_session_async(
                     output_true_peak=round(result_obj.true_peak_dbtp, 2),
                     rain_score=rain_score,
                     processing_params=params,
-                    rainnet_model_version=settings.RAIN_VERSION if source == "rainnet" else "heuristic",
+                    rainnet_model_version=model_ver,
                     aie_applied=(source == "rainnet"),
+                    c2pa_manifest_id=str(cert.cert_id),
                 )
             )
             await db.commit()
 
+            # ── ASYNC BACKGROUND TASKS (non-blocking — failure doesn't invalidate session) ──
             from app.tasks.certification import sign_rain_cert
             from app.tasks.provenance import stamp_output
             from app.tasks.aie import update_aie_profile

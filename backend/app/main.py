@@ -12,7 +12,7 @@ from app.api.dependencies import get_current_user
 from app.api.routes import (
     auth, upload, billing, sessions, download, aie, distribution,
     suno_import, score, whitelabel, workspaces, lora,
-    master, qc, separate, waitlist,
+    master, qc, separate, waitlist, provenance_routes,
 )
 
 
@@ -71,6 +71,9 @@ app.include_router(score.router, prefix="/api/v1", dependencies=_protected_deps)
 app.include_router(whitelabel.router, prefix="/api/v1", dependencies=_protected_deps)
 app.include_router(workspaces.router, prefix="/api/v1", dependencies=_protected_deps)
 app.include_router(lora.router, prefix="/api/v1", dependencies=_protected_deps)
+
+# Provenance public key (no auth — anyone can verify certs)
+app.include_router(provenance_routes.router, prefix="/api/v1")
 
 # Prototype mastering routes (master_engine + qc_engine + separation from origin/main).
 # WARNING: These routes have NO authentication in this merge state. They use an in-memory
