@@ -216,8 +216,10 @@ class InferenceService:
                 },
             )
             elapsed = time.time() - t0
+            duration_ms = int(elapsed * 1000)
+            logger.info("rainnet_inference_complete", stage="inference", duration_ms=duration_ms)
             if elapsed > 2.0:
-                logger.warning("rainnet_slow_inference", elapsed_s=round(elapsed, 3), error_code="RAIN-E402")
+                logger.warning("rainnet_slow_inference", elapsed_s=round(elapsed, 3), duration_ms=duration_ms, error_code="RAIN-E402")
             return _decode_params(outputs[0][0])
 
         except Exception as e:

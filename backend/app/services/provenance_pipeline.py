@@ -6,6 +6,7 @@ Every master that exits the pipeline must have a signed cert. No exceptions.
 from __future__ import annotations
 
 import json
+import time as _time
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
@@ -101,11 +102,12 @@ def create_rain_cert(
     return cert
 
 
-def sign_and_verify(cert: StrictRainCert) -> StrictRainCert:
+def sign_and_verify(cert: StrictRainCert, user_id: str = "") -> StrictRainCert:
     """Sign a RAIN-CERT with Ed25519 and verify the signature immediately.
 
     Mutates cert.signature. Raises if verification fails.
     """
+    t0 = _time.monotonic()
     # Convert to legacy format for signing (reuses provenance.py's Ed25519 logic)
     legacy = LegacyRainCert(
         cert_id=str(cert.cert_id),
@@ -148,10 +150,14 @@ def sign_and_verify(cert: StrictRainCert) -> StrictRainCert:
         )
 
     cert.assert_signed()
+    duration_ms = int((_time.monotonic() - t0) * 1000)
     logger.info(
         "rain_cert_signed_verified",
         cert_id=str(cert.cert_id),
         session_id=str(cert.session_id),
+        user_id=user_id,
+        stage="provenance",
+        duration_ms=duration_ms,
     )
     return cert
 

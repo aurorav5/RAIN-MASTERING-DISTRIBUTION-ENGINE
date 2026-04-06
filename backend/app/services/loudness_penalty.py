@@ -138,13 +138,18 @@ class LoudnessPenaltyPredictor:
         else:
             data = samples.astype(np.float64)
 
+        import time as _t
+        t0 = _t.monotonic()
         meter = pyln.Meter(sample_rate)  # BS.1770-4
         lufs = float(meter.integrated_loudness(data))
+        duration_ms = int((_t.monotonic() - t0) * 1000)
         logger.info(
             "loudness_penalty.measure_lufs",
             sample_rate=sample_rate,
             n_samples=int(samples.shape[0]),
             lufs=lufs,
+            stage="loudness",
+            duration_ms=duration_ms,
         )
         return lufs
 

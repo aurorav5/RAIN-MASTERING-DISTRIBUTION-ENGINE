@@ -3,12 +3,14 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 from uuid import UUID
+import structlog
 from app.core.database import get_db
 from app.api.dependencies import get_current_user, CurrentUser
 from app.models.session import Session as MasteringSession
 from app.services.storage import generate_presigned_url
 from app.services.quota import check_and_increment_downloads
 
+logger = structlog.get_logger()
 router = APIRouter(prefix="/sessions", tags=["download"])
 
 
@@ -39,6 +41,12 @@ async def download_master(
     await check_and_increment_downloads(current_user.user_id, current_user.tier, db)
 
     url = await generate_presigned_url(session.output_file_key, expires_seconds=300)
+    logger.info(
+        "download_presigned_url_generated",
+        session_id=str(session_id),
+        user_id=str(current_user.user_id),
+        stage="download",
+    )
     return RedirectResponse(url=url, status_code=302)
 
 

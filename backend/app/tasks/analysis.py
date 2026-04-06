@@ -51,8 +51,17 @@ async def _analyze_session_async(session_id: str, user_id: str) -> None:
                 await db.commit()
                 return
 
+            import time as _time
+            t0 = _time.monotonic()
             lufs, tp = await measure_lufs_true_peak(audio_data)
+            lufs_ms = int((_time.monotonic() - t0) * 1000)
+            logger.info("analysis_lufs_measured", session_id=session_id, user_id=user_id, stage="analysis", duration_ms=lufs_ms, lufs=round(lufs, 2), true_peak=round(tp, 2))
+
+            t0 = _time.monotonic()
             mel, duration, _ = extract_mel_spectrogram(audio_data)
+            mel_ms = int((_time.monotonic() - t0) * 1000)
+            logger.info("analysis_mel_extracted", session_id=session_id, user_id=user_id, stage="analysis", duration_ms=mel_ms)
+
             genre = _classify_genre(mel) or session.genre
 
             await db.execute(
