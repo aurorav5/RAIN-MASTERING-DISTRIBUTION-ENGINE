@@ -1,4 +1,7 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
+import { Loader2, Headphones, Globe } from 'lucide-react'
+import { useSessionStore } from '@/stores/session'
+import { useAuthStore } from '@/stores/auth'
 
 export default function SpatialTab() {
   const [msEnabled, setMsEnabled] = useState(false)
@@ -6,6 +9,49 @@ export default function SpatialTab() {
   const [sideGain, setSideGain] = useState(0)
   const [stereoWidth, setStereoWidth] = useState(1.0)
   const [correlationMode, setCorrelationMode] = useState<'normal' | 'wide' | 'mono'>('normal')
+
+  // Atmos state
+  const [atmosProcessing, setAtmosProcessing] = useState(false)
+  const [atmosResult, setAtmosResult] = useState<{
+    objectCount: number
+    genreTemplate: string
+    hasBinaural: boolean
+  } | null>(null)
+  const sessionId = useSessionStore(s => s.sessionId)
+  const token = useAuthStore(s => s.accessToken)
+  const baseUrl = (import.meta.env['VITE_API_URL'] as string | undefined) ?? 'http://localhost:8000/api/v1'
+
+  const handleApplySpatial = useCallback(async () => {
+    if (!sessionId) return
+    setAtmosProcessing(true)
+    try {
+      const res = await fetch(`${baseUrl}/sessions/${sessionId}/spatial`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          ms_enabled: msEnabled,
+          mid_gain: midGain,
+          side_gain: sideGain,
+          stereo_width: stereoWidth,
+          binaural_preview: true,
+        }),
+      })
+      if (!res.ok) throw new Error()
+      const result = await res.json()
+      setAtmosResult({
+        objectCount: result.object_count ?? 0,
+        genreTemplate: result.genre_template ?? 'default',
+        hasBinaural: !!result.binaural_preview_url,
+      })
+    } catch {
+      // Feature may not be available for this tier
+    } finally {
+      setAtmosProcessing(false)
+    }
+  }, [sessionId, token, baseUrl, msEnabled, midGain, sideGain, stereoWidth])
 
   return (
     <div className="p-2 space-y-3 w-full">
@@ -140,6 +186,56 @@ export default function SpatialTab() {
               <span>+1</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Atmos Spatial Audio */}
+      <div className="panel-card">
+        <div className="panel-card-header flex items-center justify-between">
+          <span className="text-[10px] font-mono tracking-widest text-rain-text">
+            SPATIAL AUDIO
+          </span>
+          <span className="text-[8px] font-mono px-2 py-0.5 border border-rain-purple/30 bg-rain-purple/10 text-rain-purple rounded">
+            STUDIO PRO
+          </span>
+        </div>
+        <div className="panel-card-body space-y-4">
+          <p className="text-[10px] text-rain-dim">
+            Apply spatial audio processing with ITD/ILD binaural rendering. Genre-specific object placement.
+          </p>
+
+          <button
+            className="btn-ghost text-xs py-2 px-4 w-full flex items-center justify-center gap-2"
+            onClick={handleApplySpatial}
+            disabled={atmosProcessing || !sessionId}
+          >
+            {atmosProcessing ? (
+              <><Loader2 size={12} className="animate-spin" /> Processing...</>
+            ) : (
+              <><Globe size={12} /> Apply Spatial</>
+            )}
+          </button>
+
+          {atmosResult && (
+            <div className="space-y-2 pt-3 border-t border-rain-border">
+              <div className="flex justify-between text-[10px]">
+                <span className="text-rain-dim">Objects</span>
+                <span className="font-mono text-rain-white">{atmosResult.objectCount}</span>
+              </div>
+              <div className="flex justify-between text-[10px]">
+                <span className="text-rain-dim">Template</span>
+                <span className="font-mono text-rain-white">{atmosResult.genreTemplate}</span>
+              </div>
+              <div className="flex justify-between text-[10px]">
+                <span className="text-rain-dim">Binaural Preview</span>
+                <span className="font-mono text-rain-teal">
+                  {atmosResult.hasBinaural ? (
+                    <span className="flex items-center gap-1"><Headphones size={10} /> Ready</span>
+                  ) : 'N/A'}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
