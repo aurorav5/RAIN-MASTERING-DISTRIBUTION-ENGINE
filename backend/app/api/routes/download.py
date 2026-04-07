@@ -11,11 +11,33 @@ import structlog
 from app.core.database import get_db
 from app.api.dependencies import get_current_user, CurrentUser
 from app.models.session import Session as MasteringSession
-from app.services.storage import generate_presigned_url, download_file, upload_file, file_exists
+from app.services.storage import generate_presigned_url, download_from_s3, upload_to_s3, head_object
 from app.services.quota import check_and_increment_downloads
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/sessions", tags=["download"])
+
+
+async def _key_exists(key: str) -> bool:
+    """Check if an S3 key exists (True/False, swallows 404)."""
+    try:
+        await head_object(key)
+        return True
+    except Exception:
+        return False
+
+
+async def _upload_bytes(key: str, data: bytes) -> None:
+    """Upload raw bytes to S3 under the given key."""
+    from app.services.storage import _s3_client
+    from app.core.config import settings
+
+    async with _s3_client() as client:
+        await client.put_object(
+            Bucket=settings.S3_BUCKET,
+            Key=key,
+            Body=data,
+        )
 
 
 @router.get("/{session_id}/download")
@@ -137,10 +159,10 @@ async def download_master_format(
     transcode_key = f"{base_key}.{ext}"
 
     # Check cache: skip transcode if already exists in S3
-    if not await file_exists(transcode_key):
-        wav_bytes = await download_file(session.output_file_key)
+    if not await _key_exists(transcode_key):
+        wav_bytes = await download_from_s3(session.output_file_key)
         transcoded = await _transcode(wav_bytes, fmt)
-        await upload_file(transcode_key, transcoded)
+        await _upload_bytes(transcode_key, transcoded)
         logger.info(
             "transcode_complete",
             session_id=str(session_id),
@@ -188,10 +210,10 @@ async def download_ddp(
 
     ddp_key = session.output_file_key.rsplit(".", 1)[0] + ".ddp.zip"
 
-    if not await file_exists(ddp_key):
-        wav_bytes = await download_file(session.output_file_key)
+    if not await _key_exists(ddp_key):
+        wav_bytes = await download_from_s3(session.output_file_key)
         ddp_zip = await asyncio.to_thread(_build_ddp_image, wav_bytes, session)
-        await upload_file(ddp_key, ddp_zip)
+        await _upload_bytes(ddp_key, ddp_zip)
         logger.info(
             "ddp_export_complete",
             session_id=str(session_id),
