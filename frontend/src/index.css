@@ -1,5 +1,66 @@
 @import "tailwindcss";
 
+/* Tailwind v4 theme — replaces tailwind.config.js */
+@theme {
+  /* Colors */
+  --color-rain-bg: #0A0F0A;
+  --color-rain-black: #060A06;
+  --color-rain-dark: #0D120D;
+  --color-rain-surface: #111A11;
+  --color-rain-panel: #152015;
+  --color-rain-border: #1E2E1E;
+  --color-rain-muted: #3A4A3A;
+  --color-rain-silver: #8A9A8A;
+  --color-rain-dim: #5A6A5A;
+  --color-rain-text: #D0E0D0;
+  --color-rain-white: #E8F0E8;
+  --color-rain-teal: #00D4AA;
+  --color-rain-cyan: #00E5C8;
+  --color-rain-purple: #8B5CF6;
+  --color-rain-magenta: #D946EF;
+  --color-rain-orange: #F97316;
+  --color-rain-lime: #AAFF00;
+  --color-rain-blue: #4A9EFF;
+  --color-rain-green: #4AFF8A;
+  --color-rain-red: #FF4444;
+  --color-rain-amber: #FFB347;
+  --color-rain-gold: #FFD700;
+
+  /* Fonts */
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* Shadows */
+  --shadow-glow-teal: 0 0 20px rgba(0, 212, 170, 0.4);
+  --shadow-glow-cyan: 0 0 15px rgba(0, 229, 200, 0.3);
+  --shadow-glow-purple: 0 0 20px rgba(139, 92, 246, 0.4);
+  --shadow-glow-green: 0 0 15px rgba(74, 255, 138, 0.3);
+  --shadow-glow-red: 0 0 15px rgba(255, 68, 68, 0.3);
+  --shadow-inner-3d: inset 0 2px 4px rgba(255, 255, 255, 0.05), inset 0 -2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-raised: 0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.2);
+
+  /* Gradients */
+  --background-image-infinity-gradient: linear-gradient(135deg, #00D4AA, #00E5C8, #4AFF8A);
+  --background-image-accent-gradient: linear-gradient(135deg, #00D4AA, #8B5CF6);
+  --background-image-meter-gradient: linear-gradient(to top, #4AFF8A, #AAFF00, #FFB347, #FF4444);
+
+  /* Animations */
+  --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-scan: scan 2s linear infinite;
+  --animate-glow-pulse: glow-pulse 2s ease-in-out infinite;
+  --animate-spin-slow: spin 8s linear infinite;
+}
+
+@keyframes scan {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
 /* ============================================
    R∞N DESIGN SYSTEM v4 — PRO-AUDIO DAW GRADE
    Dark emerald DNA · Hardware precision · Studio grade
