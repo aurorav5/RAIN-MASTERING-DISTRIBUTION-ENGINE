@@ -56,7 +56,8 @@ class GrooveEngine:
             mono = audio.flatten()
         
         # Compute envelope using Hilbert transform
-        analytic_signal = np.abs(np.hilbert(mono))
+        from scipy.signal import hilbert
+        analytic_signal = np.abs(hilbert(mono))
         
         # Smooth envelope
         window_size = int(0.01 * self.sr)  # 10ms window

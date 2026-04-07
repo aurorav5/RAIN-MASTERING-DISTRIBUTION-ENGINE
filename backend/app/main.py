@@ -75,10 +75,16 @@ app.include_router(lora.router, prefix="/api/v1", dependencies=_protected_deps)
 # Provenance public key (no auth — anyone can verify certs)
 app.include_router(provenance_routes.router, prefix="/api/v1")
 
-# Prototype mastering routes — auth added post-audit
-app.include_router(master.router, prefix="/api/v1", dependencies=_protected_deps)
-app.include_router(qc.router, prefix="/api/v1", dependencies=_protected_deps)
-app.include_router(separate.router, prefix="/api/v1", dependencies=_protected_deps)
+# Mastering routes — unprotected in dev for local testing without Postgres.
+# In production, re-add _protected_deps.
+if settings.RAIN_ENV == "development":
+    app.include_router(master.router, prefix="/api/v1")
+    app.include_router(qc.router, prefix="/api/v1")
+    app.include_router(separate.router, prefix="/api/v1")
+else:
+    app.include_router(master.router, prefix="/api/v1", dependencies=_protected_deps)
+    app.include_router(qc.router, prefix="/api/v1", dependencies=_protected_deps)
+    app.include_router(separate.router, prefix="/api/v1", dependencies=_protected_deps)
 
 
 @app.on_event("startup")
