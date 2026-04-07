@@ -50,6 +50,18 @@ ml/*/runs/
 *.pth
 ml/*/wandb/
 
+# Local keys / secrets
+keys/
+
+# Training data
+synthetic/
+training_manifest.jsonl
+training_monitor.log
+
+# Claude Code local
+.claude/launch.json.local-backup
+frontend/.claude/
+
 # OS
 .DS_Store
 Thumbs.db
