@@ -26,12 +26,18 @@ interface StemState {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const STEM_DEFS: Omit<StemState, 'muted' | 'solo' | 'gain' | 'pan' | 'eq'>[] = [
-  { id: 'vocals',  label: 'VOCALS',  color: '#8B5CF6' },
-  { id: 'drums',   label: 'DRUMS',   color: '#F97316' },
-  { id: 'bass',    label: 'BASS',    color: '#FF4444' },
-  { id: 'guitar',  label: 'GUITAR',  color: '#00D4AA' },
-  { id: 'piano',   label: 'PIANO',   color: '#4A9EFF' },
-  { id: 'other',   label: 'OTHER',   color: '#AAFF00' },
+  { id: 'vocals',      label: 'VOCALS',      color: '#8B5CF6' },
+  { id: 'drums',       label: 'DRUMS',       color: '#F97316' },
+  { id: 'bass',        label: 'BASS',        color: '#FF4444' },
+  { id: 'guitar',      label: 'GUITAR',      color: '#00D4AA' },
+  { id: 'piano',       label: 'PIANO',       color: '#4A9EFF' },
+  { id: 'synth',       label: 'SYNTH',       color: '#D946EF' },
+  { id: 'strings',     label: 'STRINGS',     color: '#FFD700' },
+  { id: 'brass',       label: 'BRASS',       color: '#FFB347' },
+  { id: 'woodwinds',   label: 'WINDS',       color: '#00E5C8' },
+  { id: 'percussion',  label: 'PERC',        color: '#AAFF00' },
+  { id: 'fx',          label: 'FX/SFX',      color: '#4AFF8A' },
+  { id: 'other',       label: 'OTHER',       color: '#5A6A5A' },
 ]
 
 const SEPARATION_STEPS = [
@@ -208,7 +214,7 @@ export default function StemsTab() {
         {/* ── Top Bar ─────────────────────────────────────────────────────── */}
         <div className="flex items-center gap-3 flex-wrap">
           <h2 className="text-xs font-mono text-rain-silver tracking-widest uppercase flex-1">
-            6-STEM SEPARATION — DEMUCS HTDEMUCS_6S
+            12-STEM SEPARATION — BS-ROFORMER CASCADE
           </h2>
           <span className="badge badge-cyan text-[9px]">{inferenceBackend}</span>
           <button

@@ -3,6 +3,7 @@ import { useSessionStore } from '@/stores/session'
 import type { MacroValues } from '@/stores/session'
 import { api, APIError } from '@/utils/api'
 import type { AnalysisData, ProcessResult } from '@/utils/api'
+import { audioEngine } from '@/audio/AudioEngine'
 import { UploadZone } from '../controls/UploadZone'
 import { Waveform } from '../visualizers/Waveform'
 import { Spectrum } from '../visualizers/Spectrum'
@@ -146,6 +147,14 @@ export default function MasteringTab() {
       const buf = await f.arrayBuffer()
       setInputBuffer(buf)
       setFileInfo(name, 0, 48000, 24, 2)
+
+      // Load into AudioEngine for waveform + spectrum visualization
+      try {
+        const info = await audioEngine.loadAudioFile(f)
+        setFileInfo(name, info.duration, info.sampleRate, 24, info.numberOfChannels)
+      } catch {
+        // AudioEngine load failed — visualizers will show empty, non-blocking
+      }
 
       // Try backend upload, fall back to local-only mode if unreachable
       try {

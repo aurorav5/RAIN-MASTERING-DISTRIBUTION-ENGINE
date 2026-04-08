@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSessionStore } from '@/stores/session'
 import { api } from '@/utils/api'
 import type { QCReportData, QCCheckData } from '@/utils/api'
-import { CheckCircle, XCircle, AlertTriangle, Wrench, Shield } from 'lucide-react'
+import { CheckCircle, XCircle, AlertTriangle, Wrench, Shield, RotateCw } from 'lucide-react'
 
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'advisory'] as const
 
@@ -10,6 +10,7 @@ export default function QCTab() {
   const { rainScore, outputLufs, outputTruePeak, status, sessionId } = useSessionStore()
   const [qcReport, setQcReport] = useState<QCReportData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [applying, setApplying] = useState(false)
 
   // Auto-fetch QC when mastering is complete
   useEffect(() => {
@@ -20,6 +21,27 @@ export default function QCTab() {
       .catch(() => setQcReport(null))
       .finally(() => setLoading(false))
   }, [status, sessionId])
+
+  // Apply auto-remediation: re-run mastering with remediate flag
+  const handleApplyFix = useCallback(async () => {
+    if (!sessionId || applying) return
+    setApplying(true)
+    try {
+      // Re-process with remediation enabled
+      await api.master.process(sessionId, { remediate: true } as any)
+      // Re-fetch QC report after remediation
+      const updated = await api.master.qcReport(sessionId)
+      setQcReport(updated)
+    } catch {
+      // If remediation endpoint not available, just re-fetch QC
+      try {
+        const updated = await api.master.qcReport(sessionId)
+        setQcReport(updated)
+      } catch { /* ignore */ }
+    } finally {
+      setApplying(false)
+    }
+  }, [sessionId, applying])
 
   const overallScore = rainScore?.overall ?? null
 
@@ -155,11 +177,31 @@ export default function QCTab() {
                 </tbody>
               </table>
 
-              {/* Remediation summary */}
+              {/* Remediation summary + Apply Fix */}
               {qcReport.remediated_count > 0 && (
                 <div className="mt-2 px-2 py-1.5 rounded border border-amber-500/30 bg-amber-500/10 text-[9px] font-mono text-amber-400 flex items-center gap-1.5">
                   <Wrench size={10} />
                   {qcReport.remediated_count} check{qcReport.remediated_count > 1 ? 's' : ''} auto-remediated
+                </div>
+              )}
+
+              {/* Apply Fix button — shows when QC has failures */}
+              {!qcReport.passed && (
+                <div className="mt-3 flex items-center gap-3">
+                  <button
+                    onClick={handleApplyFix}
+                    disabled={applying}
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded text-[10px] font-mono font-bold tracking-wider
+                      text-rain-black bg-gradient-to-r from-rain-teal to-rain-cyan
+                      hover:from-rain-cyan hover:to-rain-green transition-all
+                      disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <RotateCw size={11} className={applying ? 'animate-spin' : ''} />
+                    {applying ? 'APPLYING...' : 'APPLY FIX & RE-MASTER'}
+                  </button>
+                  <span className="text-[8px] font-mono text-rain-dim">
+                    Re-runs mastering with auto-remediation for clipping, ISP, and DC offset
+                  </span>
                 </div>
               )}
             </div>

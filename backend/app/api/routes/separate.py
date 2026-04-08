@@ -5,11 +5,11 @@ GET  /api/v1/separate/{job_id}/status — poll status
 GET  /api/v1/separate/{job_id}/stems  — get stem download URLs
 WS   /api/v1/separate/{job_id}/ws     — WebSocket progress stream
 
-When Demucs is not available (DEMUCS_DEVICE != "cuda"),
+When BS-RoFormer is not available (SEPARATION_ENABLED != true),
 returns a structured response explaining the fallback:
 {
   "status": "unavailable",
-  "reason": "demucs_not_available",
+  "reason": "separation_not_available",
   "message": "Stem separation requires server-side GPU processing. Available for Creator+ tiers.",
   "fallback": "Upload pre-separated stems via /api/v1/separate/upload-stems"
 }
@@ -38,7 +38,10 @@ _separation_jobs: dict[str, dict[str, Any]] = {}
 ALLOWED_EXTENSIONS = {".wav", ".flac", ".aiff", ".aif", ".mp3"}
 MAX_FILE_SIZE = 200 * 1024 * 1024  # 200MB
 
-STEM_NAMES = ["vocals", "drums", "bass", "guitar", "piano", "other"]
+STEM_NAMES = [
+    "vocals", "drums", "bass", "guitar", "piano", "synth",
+    "strings", "brass", "woodwinds", "percussion", "fx", "other",
+]
 
 UPLOAD_DIR = Path(tempfile.gettempdir()) / "rain_separate_uploads"
 STEMS_DIR = Path(tempfile.gettempdir()) / "rain_separate_stems"
@@ -47,15 +50,15 @@ STEMS_DIR.mkdir(exist_ok=True)
 
 _UNAVAILABLE_RESPONSE: dict[str, str] = {
     "status": "unavailable",
-    "reason": "demucs_not_available",
-    "message": "Stem separation requires server-side GPU processing. Available for Creator+ tiers.",
+    "reason": "separation_not_available",
+    "message": "Stem separation requires server-side GPU processing (BS-RoFormer cascade). Available for Creator+ tiers.",
     "fallback": "Upload pre-separated stems via /api/v1/separate/upload-stems",
 }
 
 
-def _demucs_available() -> bool:
-    """Return True only when DEMUCS_DEVICE is configured for CUDA GPU processing."""
-    return settings.DEMUCS_DEVICE == "cuda"
+def _separation_available() -> bool:
+    """Return True only when separation is enabled with GPU."""
+    return getattr(settings, "SEPARATION_ENABLED", False) is True
 
 
 @router.post("/upload")
@@ -67,9 +70,9 @@ async def upload_for_separation(file: UploadFile = File(...)) -> dict[str, Any]:
     If Demucs is unavailable (no GPU), returns a structured unavailable response
     with instructions to use the manual upload-stems endpoint instead.
     """
-    if not _demucs_available():
-        log = logger.bind(stage="upload", reason="demucs_not_available")
-        log.info("separation_unavailable", device=settings.DEMUCS_DEVICE)
+    if not _separation_available():
+        log = logger.bind(stage="upload", reason="separation_not_available")
+        log.info("separation_unavailable", separation_enabled=getattr(settings, "SEPARATION_ENABLED", False))
         return _UNAVAILABLE_RESPONSE
 
     if not file.filename:

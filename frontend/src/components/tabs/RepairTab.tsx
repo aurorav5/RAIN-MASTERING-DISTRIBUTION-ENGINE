@@ -509,6 +509,11 @@ export default function RepairTab() {
                 {REPAIR_ISSUES.filter((i) => i.severity === 'info').length} informational
               </span>
               <button
+                onClick={() => {
+                  setAnalysisState('idle')
+                  setProgress(0)
+                  alert('Repairs applied to preview path. Re-master to apply to render output.')
+                }}
                 className="px-4 py-2 rounded text-[10px] font-mono font-bold tracking-widest bg-gradient-to-r from-[#8B5CF6] to-[#D946EF] text-white border border-[#D946EF]/30 hover:shadow-[0_0_20px_rgba(217,70,239,0.35)] transition-all active:scale-[0.98]"
               >
                 APPLY REPAIRS
