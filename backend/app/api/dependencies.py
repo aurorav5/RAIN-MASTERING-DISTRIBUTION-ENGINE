@@ -5,6 +5,7 @@ from uuid import UUID
 import jwt
 import structlog
 
+from app.core.config import settings
 from app.core.security import decode_token
 from app.core.database import get_db
 from app.core.tiers import Tier, TIER_RANK, tier_gte  # re-exported for backward compat
@@ -20,12 +21,28 @@ class CurrentUser:
         self.is_admin = is_admin
 
 
+# Synthetic dev user — enterprise admin, bypasses all tier gates.
+_DEV_USER = CurrentUser(
+    user_id=UUID("00000000-0000-0000-0000-000000000001"),
+    tier="enterprise",
+    is_admin=True,
+)
+
+
 async def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> CurrentUser:
-    """Decode JWT, return CurrentUser. Stores on request.state for rate-limit key."""
+    """Decode JWT, return CurrentUser. Stores on request.state for rate-limit key.
+
+    In development mode, returns a synthetic enterprise admin user so the
+    entire stack can be exercised without registration or JWTs.
+    """
+    if settings.RAIN_ENV == "development":
+        request.state.user = _DEV_USER
+        return _DEV_USER
+
     if credentials is None:
         raise HTTPException(401, detail={"code": "RAIN-E100", "message": "Missing auth token"})
     try:

@@ -30,13 +30,17 @@ const ReferenceTab = lazy(() => import('@/components/tabs/ReferenceTab'))
 const RepairTab = lazy(() => import('@/components/tabs/RepairTab'))
 const TestLabTab = lazy(() => import('@/components/tabs/TestLabTab'))
 
+const DEV_MODE = import.meta.env.DEV
+
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
+  if (DEV_MODE) return <>{children}</>
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
+  if (DEV_MODE) return <Navigate to="/app" replace />
   return isAuthenticated ? <Navigate to="/app" replace /> : <>{children}</>
 }
 
