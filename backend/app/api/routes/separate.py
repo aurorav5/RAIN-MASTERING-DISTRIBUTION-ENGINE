@@ -67,7 +67,7 @@ async def upload_for_separation(file: UploadFile = File(...)) -> dict[str, Any]:
     Upload an audio file and queue it for stem separation.
     Returns job_id for subsequent status polling and WebSocket progress.
 
-    If Demucs is unavailable (no GPU), returns a structured unavailable response
+    If BS-RoFormer is unavailable (no GPU), returns a structured unavailable response
     with instructions to use the manual upload-stems endpoint instead.
     """
     if not _separation_available():
@@ -204,7 +204,7 @@ async def upload_pre_separated_stems(
     """
     Accept up to 6 pre-separated stems as form files.
     Stores them and returns session info for manual stem upload workflow.
-    This is the fallback path when Demucs GPU processing is unavailable.
+    This is the fallback path when BS-RoFormer GPU processing is unavailable.
     """
     stem_files: dict[str, UploadFile | None] = {
         "vocals": vocals,

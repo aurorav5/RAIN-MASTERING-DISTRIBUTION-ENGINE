@@ -10,7 +10,7 @@ import {
 const TIERS = [
   { name: 'Free', price: '$0', period: '', desc: 'Listen & preview', features: ['WASM mastering engine', 'Real-time preview', 'RAIN Score analysis', 'No download'], cta: 'Start Free' },
   { name: 'Spark', price: '$9', period: '/mo', desc: '50 downloads', features: ['Full resolution export', 'WAV / FLAC / MP3', 'Session persistence', 'Simple Mode'], cta: 'Get Spark' },
-  { name: 'Creator', price: '$29', period: '/mo', desc: 'Full creative control', features: ['Advanced Mode + stems', 'Demucs stem separation', 'Claude AI assists (10/mo)', 'Artist Identity Engine'], cta: 'Go Creator', featured: true },
+  { name: 'Creator', price: '$29', period: '/mo', desc: 'Full creative control', features: ['Advanced Mode + stems', 'BS-RoFormer 12-stem separation', 'Claude AI assists (10/mo)', 'Artist Identity Engine'], cta: 'Go Creator', featured: true },
   { name: 'Artist', price: '$59', period: '/mo', desc: 'Professional distribution', features: ['DAW plugin (VST3/AU/AAX)', 'Distribution Intelligence', 'Full AIE + reference match', 'RAIN-CERT provenance'], cta: 'Go Artist' },
   { name: 'Studio Pro', price: '$149', period: '/mo', desc: 'Studio-grade mastering', features: ['Dolby Atmos upmix', 'DDEX / DDP delivery', 'Vinyl mastering mode', 'Real-time collaboration'], cta: 'Go Pro' },
   { name: 'Enterprise', price: 'Custom', period: '', desc: 'Labels & teams', features: ['Custom RainNet LoRA', 'White-label API', 'Unlimited everything', 'Dedicated support'], cta: 'Contact Sales' },
@@ -19,7 +19,7 @@ const TIERS = [
 const FEATURES = [
   { icon: Cpu, title: 'Local-First Processing', desc: 'Audio never leaves your device. RainDSP runs in WASM — 64-bit double precision, deterministic rendering. Zero cloud dependency for processing.' },
   { icon: Shield, title: 'RAIN-CERT Provenance', desc: 'Ed25519-signed provenance certificates. Every master is cryptographically verified — input hash, output hash, WASM binary hash, processing params.' },
-  { icon: Layers, title: 'Stem-Aware Mastering', desc: 'Demucs v4 htdemucs_6s separation. 12-stem multi-pass extraction. Per-stem gain control with SAIL intelligent limiting.' },
+  { icon: Layers, title: 'Stem-Aware Mastering', desc: 'BS-RoFormer SW cascaded 4-pass pipeline. 12-stem extraction. Per-stem gain control with SAIL intelligent limiting.' },
   { icon: Globe, title: 'Platform-Aware Delivery', desc: 'Automatic loudness targeting for Spotify, Apple Music, YouTube, Tidal, Amazon, TikTok, SoundCloud, and vinyl. DDEX ERN 4.3 distribution.' },
   { icon: Music2, title: 'Artist Identity Engine', desc: 'Your mastering fingerprint. 64-dimensional voice vector that learns your preferences. EMA-updated over sessions. Exportable.' },
   { icon: BarChart3, title: 'RAIN Score', desc: 'Platform Survival Score. Composite quality metric across loudness compliance, codec penalty, dynamic range, and stereo integrity.' },
@@ -385,7 +385,7 @@ export default function LandingPage() {
       <div className="border-t border-rain-border/20 py-4 px-6">
         <p className="text-center text-[9px] font-mono text-rain-muted tracking-wide">
           Powered by:{' '}
-          React 19 · Vite 7 · RainDSP WASM · ONNX Runtime · Demucs v4 · Ed25519 · C2PA v2.2 · DDEX ERN 4.3.2
+          React 19 · Vite 7 · RainDSP WASM · ONNX Runtime · BS-RoFormer · Ed25519 · C2PA v2.2 · DDEX ERN 4.3.2
         </p>
       </div>
 
