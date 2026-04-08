@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback } from 'react'
-import { FlaskConical, Play, Pause, Shuffle, Volume2, Headphones } from 'lucide-react'
+import { useState, useRef, useCallback, type ChangeEvent } from 'react'
+import { FlaskConical, Play, Pause, Shuffle, Volume2, Headphones, Upload } from 'lucide-react'
 
 type ComparisonMode = 'ab' | 'codec'
 
@@ -13,6 +13,23 @@ export default function TestLabTab() {
 
   const audioRefA = useRef<HTMLAudioElement>(null)
   const audioRefB = useRef<HTMLAudioElement>(null)
+  const [fileNameA, setFileNameA] = useState<string | null>(null)
+  const [fileNameB, setFileNameB] = useState<string | null>(null)
+
+  const handleFileLoad = useCallback((target: 'A' | 'B') => (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const url = URL.createObjectURL(file)
+    const ref = target === 'A' ? audioRefA.current : audioRefB.current
+    if (ref) {
+      // Revoke previous object URL to avoid memory leaks
+      if (ref.src && ref.src.startsWith('blob:')) URL.revokeObjectURL(ref.src)
+      ref.src = url
+      ref.load()
+    }
+    if (target === 'A') setFileNameA(file.name)
+    else setFileNameB(file.name)
+  }, [])
 
   const togglePlay = useCallback(() => {
     const ref = activeSource === 'A' ? audioRefA.current : audioRefB.current
@@ -71,6 +88,26 @@ export default function TestLabTab() {
 
       {mode === 'ab' ? (
         <>
+          {/* File loaders */}
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <label className="panel-card p-3 flex items-center gap-2 cursor-pointer hover:border-rain-purple/50 transition-colors">
+              <Upload size={14} className="text-rain-purple shrink-0" />
+              <div className="min-w-0">
+                <div className="text-[10px] font-bold text-rain-white">Track A (Original)</div>
+                <div className="text-[9px] text-rain-muted truncate">{fileNameA ?? 'Click to load audio'}</div>
+              </div>
+              <input type="file" accept="audio/*" className="hidden" onChange={handleFileLoad('A')} />
+            </label>
+            <label className="panel-card p-3 flex items-center gap-2 cursor-pointer hover:border-rain-purple/50 transition-colors">
+              <Upload size={14} className="text-rain-purple shrink-0" />
+              <div className="min-w-0">
+                <div className="text-[10px] font-bold text-rain-white">Track B (Mastered)</div>
+                <div className="text-[9px] text-rain-muted truncate">{fileNameB ?? 'Click to load audio'}</div>
+              </div>
+              <input type="file" accept="audio/*" className="hidden" onChange={handleFileLoad('B')} />
+            </label>
+          </div>
+
           {/* A/B Comparison */}
           <div className="panel-card p-4">
             <div className="flex items-center justify-between mb-4">

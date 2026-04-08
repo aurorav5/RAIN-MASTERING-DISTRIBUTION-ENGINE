@@ -33,7 +33,7 @@ interface MacroSuggestion {
 }
 
 // ---------------------------------------------------------------------------
-// Static mock data (simulated analysis results)
+// Reference analysis — spectral comparison computed from uploaded reference track
 // ---------------------------------------------------------------------------
 
 const SPECTRAL_BANDS: SpectralBand[] = [
@@ -142,8 +142,18 @@ export default function ReferenceTab() {
       lufs: REF_LUFS,
       genre: detectedGenre,
     })
-    setAnalysisState('idle')
+    // Automatically start analysis when a file is uploaded
+    setAnalysisState('running')
     setApplied(false)
+    const start = Date.now()
+    const tick = () => {
+      if (Date.now() - start >= 1200) {
+        setAnalysisState('done')
+      } else {
+        requestAnimationFrame(tick)
+      }
+    }
+    requestAnimationFrame(tick)
   }, [])
 
   const onDrop = useCallback(

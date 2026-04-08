@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+// Demo data — connects to session history API when available
 const MOCK_SESSIONS = [
   { id: 'ses_001', date: '2026-03-28', track: 'Midnight Drive', genre: 'Electronic', score: 94, lufs: -14.0 },
   { id: 'ses_002', date: '2026-03-27', track: 'Golden Hour', genre: 'Pop', score: 91, lufs: -13.8 },
@@ -8,6 +9,7 @@ const MOCK_SESSIONS = [
   { id: 'ses_005', date: '2026-03-24', track: 'Storm Front', genre: 'Rock', score: 85, lufs: -13.5 },
 ] as const
 
+// Demo data — connects to session history API when available
 const GENRE_DIST = [
   { genre: 'Electronic', pct: 35, color: '#8B5CF6' },
   { genre: 'Pop', pct: 25, color: '#D946EF' },

@@ -10,40 +10,42 @@ const BIT_DEPTHS = ['16-bit', '24-bit', '32-bit float'] as const
 const SAMPLE_RATES = ['44100', '48000', '88200', '96000'] as const
 const MP3_BITRATES = ['128', '192', '256', '320'] as const
 
-// File size estimates (hardcoded UI values, not real calculation)
-const FILE_SIZE_ESTIMATES: Record<string, string> = {
-  'WAV-16-bit-44100': 'WAV 16-bit/44.1kHz: ~31 MB (3:20)',
-  'WAV-16-bit-48000': 'WAV 16-bit/48kHz: ~34 MB (3:20)',
-  'WAV-16-bit-88200': 'WAV 16-bit/88.2kHz: ~61 MB (3:20)',
-  'WAV-16-bit-96000': 'WAV 16-bit/96kHz: ~67 MB (3:20)',
-  'WAV-24-bit-44100': 'WAV 24-bit/44.1kHz: ~46 MB (3:20)',
-  'WAV-24-bit-48000': 'WAV 24-bit/48kHz: ~52 MB (3:20)',
-  'WAV-24-bit-88200': 'WAV 24-bit/88.2kHz: ~91 MB (3:20)',
-  'WAV-24-bit-96000': 'WAV 24-bit/96kHz: ~100 MB (3:20)',
-  'WAV-32-bit float-44100': 'WAV 32f/44.1kHz: ~62 MB (3:20)',
-  'WAV-32-bit float-48000': 'WAV 32f/48kHz: ~67 MB (3:20)',
-  'WAV-32-bit float-88200': 'WAV 32f/88.2kHz: ~122 MB (3:20)',
-  'WAV-32-bit float-96000': 'WAV 32f/96kHz: ~134 MB (3:20)',
-  'FLAC-16-bit-44100': 'FLAC 16-bit/44.1kHz: ~18 MB (3:20)',
-  'FLAC-16-bit-48000': 'FLAC 16-bit/48kHz: ~20 MB (3:20)',
-  'FLAC-16-bit-88200': 'FLAC 16-bit/88.2kHz: ~36 MB (3:20)',
-  'FLAC-16-bit-96000': 'FLAC 16-bit/96kHz: ~39 MB (3:20)',
-  'FLAC-24-bit-44100': 'FLAC 24-bit/44.1kHz: ~27 MB (3:20)',
-  'FLAC-24-bit-48000': 'FLAC 24-bit/48kHz: ~30 MB (3:20)',
-  'FLAC-24-bit-88200': 'FLAC 24-bit/88.2kHz: ~54 MB (3:20)',
-  'FLAC-24-bit-96000': 'FLAC 24-bit/96kHz: ~59 MB (3:20)',
-  'FLAC-32-bit float-44100': 'FLAC 32f/44.1kHz: ~35 MB (3:20)',
-  'FLAC-32-bit float-48000': 'FLAC 32f/48kHz: ~38 MB (3:20)',
-  'FLAC-32-bit float-88200': 'FLAC 32f/88.2kHz: ~71 MB (3:20)',
-  'FLAC-32-bit float-96000': 'FLAC 32f/96kHz: ~77 MB (3:20)',
-  'MP3-128': 'MP3 128kbps: ~3 MB (3:20)',
-  'MP3-192': 'MP3 192kbps: ~5 MB (3:20)',
-  'MP3-256': 'MP3 256kbps: ~6 MB (3:20)',
-  'MP3-320': 'MP3 320kbps: ~8 MB (3:20)',
-  'AAC-128': 'AAC 128kbps: ~3 MB (3:20)',
-  'AAC-192': 'AAC 192kbps: ~4 MB (3:20)',
-  'AAC-256': 'AAC 256kbps: ~6 MB (3:20)',
-  'AAC-320': 'AAC 320kbps: ~7 MB (3:20)',
+// Default file size estimates (3:20 = 200s fallback when no session duration available)
+const DEFAULT_DURATION = 200
+const DEFAULT_SAMPLE_RATE = 48000
+const DEFAULT_CHANNELS = 2
+
+function formatDuration(sec: number): string {
+  const m = Math.floor(sec / 60)
+  const s = Math.floor(sec % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+function computeFileSizeMB(
+  format: typeof FORMATS[number],
+  bitDepth: typeof BIT_DEPTHS[number],
+  sampleRate: number,
+  channels: number,
+  duration: number,
+  mp3Bitrate: number,
+): number {
+  const bytesPerMB = 1024 * 1024
+  if (format === 'WAV') {
+    const bytesPerSample = bitDepth === '16-bit' ? 2 : bitDepth === '24-bit' ? 3 : 4
+    return (sampleRate * bytesPerSample * channels * duration) / bytesPerMB
+  }
+  if (format === 'FLAC') {
+    // Roughly 60% of WAV 16-bit size
+    const wav16Size = (sampleRate * 2 * channels * duration) / bytesPerMB
+    return wav16Size * 0.6
+  }
+  if (format === 'MP3') {
+    return (mp3Bitrate * duration) / 8 / 1024
+  }
+  if (format === 'AAC') {
+    return (mp3Bitrate * duration) / 8 / 1024
+  }
+  return 0
 }
 
 function getFileSizeEstimate(
@@ -51,14 +53,27 @@ function getFileSizeEstimate(
   bitDepth: typeof BIT_DEPTHS[number],
   sampleRate: typeof SAMPLE_RATES[number],
   mp3Bitrate: typeof MP3_BITRATES[number],
+  sessionDuration: number,
+  sessionSampleRate: number,
+  sessionChannels: number,
 ): string {
-  if (format === 'MP3') return FILE_SIZE_ESTIMATES[`MP3-${mp3Bitrate}`] ?? ''
-  if (format === 'AAC') return FILE_SIZE_ESTIMATES[`AAC-${mp3Bitrate}`] ?? ''
-  return FILE_SIZE_ESTIMATES[`${format}-${bitDepth}-${sampleRate}`] ?? ''
+  const duration = sessionDuration > 0 ? sessionDuration : DEFAULT_DURATION
+  const sr = sessionDuration > 0 ? sessionSampleRate : DEFAULT_SAMPLE_RATE
+  const ch = sessionDuration > 0 ? sessionChannels : DEFAULT_CHANNELS
+  // For WAV/FLAC, use the selected output sample rate; for lossy, sample rate doesn't affect bitrate
+  const effectiveSr = (format === 'WAV' || format === 'FLAC') ? Number(sampleRate) : sr
+  const sizeMB = computeFileSizeMB(format, bitDepth, effectiveSr, ch, duration, Number(mp3Bitrate))
+  const durationStr = formatDuration(duration)
+
+  if (format === 'MP3') return `MP3 ${mp3Bitrate}kbps: ~${Math.round(sizeMB)} MB (${durationStr})`
+  if (format === 'AAC') return `AAC ${mp3Bitrate}kbps: ~${Math.round(sizeMB)} MB (${durationStr})`
+  const depthLabel = bitDepth === '32-bit float' ? '32f' : bitDepth
+  const srLabel = Number(sampleRate) >= 1000 ? `${(Number(sampleRate) / 1000).toFixed(1)}kHz` : `${sampleRate}Hz`
+  return `${format} ${depthLabel}/${srLabel}: ~${Math.round(sizeMB)} MB (${durationStr})`
 }
 
 export default function ExportTab() {
-  const { status, rainCertId } = useSessionStore()
+  const { status, rainCertId, fileDuration, fileSampleRate, fileChannels } = useSessionStore()
   const { tierGte } = useAuthStore()
   const [format, setFormat] = useState<typeof FORMATS[number]>('WAV')
   const [bitDepth, setBitDepth] = useState<typeof BIT_DEPTHS[number]>('24-bit')
@@ -78,7 +93,7 @@ export default function ExportTab() {
   const [ddexLyrics, setDdexLyrics] = useState(false)
 
   const canExport = status === 'complete' && tierGte('spark')
-  const fileSizeEstimate = getFileSizeEstimate(format, bitDepth, sampleRate, mp3Bitrate)
+  const fileSizeEstimate = getFileSizeEstimate(format, bitDepth, sampleRate, mp3Bitrate, fileDuration, fileSampleRate, fileChannels)
   const certIdDisplay = rainCertId ? rainCertId.slice(0, 12) : null
 
   return (

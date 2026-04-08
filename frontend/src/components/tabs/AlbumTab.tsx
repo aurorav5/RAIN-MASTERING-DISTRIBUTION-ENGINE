@@ -207,13 +207,22 @@ export default function AlbumTab() {
             <div className="panel-card p-4">
               <div className="panel-card-header">Export</div>
               <div className="flex gap-2 mt-3">
-                <button className="btn-ghost text-xs py-2 px-4 flex items-center gap-2">
+                <button
+                  className="btn-ghost text-xs py-2 px-4 flex items-center gap-2"
+                  onClick={() => alert('Export as DDP Image — requires Studio Pro tier. Feature coming soon.')}
+                >
                   <Download size={12} /> DDP Image
                 </button>
-                <button className="btn-ghost text-xs py-2 px-4 flex items-center gap-2">
+                <button
+                  className="btn-ghost text-xs py-2 px-4 flex items-center gap-2"
+                  onClick={() => alert('Export as DDEX Release — requires Studio Pro tier. Feature coming soon.')}
+                >
                   <Download size={12} /> DDEX Release
                 </button>
-                <button className="btn-ghost text-xs py-2 px-4 flex items-center gap-2">
+                <button
+                  className="btn-ghost text-xs py-2 px-4 flex items-center gap-2"
+                  onClick={() => alert('Export as Individual Tracks — requires Studio Pro tier. Feature coming soon.')}
+                >
                   <Download size={12} /> Individual Tracks
                 </button>
               </div>

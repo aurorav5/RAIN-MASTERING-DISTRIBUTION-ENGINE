@@ -14,6 +14,7 @@ interface MarketStats {
 export default function MarketTab() {
   const [stats, setStats] = useState<MarketStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [statusMsg, setStatusMsg] = useState<string | null>(null)
 
   const token = useAuthStore(s => s.accessToken)
   const baseUrl = (import.meta.env['VITE_API_URL'] as string | undefined) ?? 'http://localhost:8000/api/v1'
@@ -29,8 +30,8 @@ export default function MarketTab() {
         const data = await res.json()
         if (!cancelled) setStats(data)
       } catch {
-        // No releases yet — show empty state
         if (!cancelled) {
+          setStatusMsg('Market Intelligence data loading...')
           setStats({
             releaseCount: 0,
             downloadCount: 0,
@@ -60,6 +61,12 @@ export default function MarketTab() {
         <TrendingUp size={14} className="text-rain-teal" />
         <span className="text-xs font-semibold text-rain-teal uppercase tracking-widest">Market Intelligence</span>
       </div>
+
+      {statusMsg && (
+        <div className="glass-panel rounded-lg p-3 text-center text-xs text-rain-dim mb-3">
+          {statusMsg}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-16">

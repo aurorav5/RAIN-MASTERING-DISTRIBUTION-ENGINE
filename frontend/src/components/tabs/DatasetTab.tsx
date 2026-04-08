@@ -23,6 +23,8 @@ export default function DatasetTab() {
   const baseUrl = (import.meta.env['VITE_API_URL'] as string | undefined) ?? 'http://localhost:8000/api/v1'
   const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
 
+  const [enterpriseMsg, setEnterpriseMsg] = useState<string | null>(null)
+
   useEffect(() => {
     if (!isEnterprise) { setLoading(false); return }
     let cancelled = false
@@ -33,7 +35,10 @@ export default function DatasetTab() {
         const data = await res.json()
         if (!cancelled) setStats(data)
       } catch {
-        if (!cancelled) setStats({ fileCount: 0, totalDuration: 0, genreDistribution: {}, lufsRange: [0, 0] })
+        if (!cancelled) {
+          setEnterpriseMsg('Custom RainNet training — Enterprise tier. Contact sales@arcovel.com')
+          setStats({ fileCount: 0, totalDuration: 0, genreDistribution: {}, lufsRange: [0, 0] })
+        }
       }
       try {
         const res = await fetch(`${baseUrl}/datasets/training-status`, { headers })
@@ -41,7 +46,7 @@ export default function DatasetTab() {
         const status = await res.json()
         if (!cancelled) setTrainingStatus(status.status ?? 'idle')
       } catch {
-        // ignore
+        // training-status not available
       }
       if (!cancelled) setLoading(false)
     }
@@ -73,8 +78,8 @@ export default function DatasetTab() {
         const res2 = await fetch(`${baseUrl}/datasets/stats`, { headers })
         const data = await res2.json()
         setStats(data)
-      } catch (e) {
-        // Upload failed
+      } catch {
+        setEnterpriseMsg('Custom RainNet training — Enterprise tier. Contact sales@arcovel.com')
       } finally {
         setUploading(false)
       }
@@ -88,7 +93,8 @@ export default function DatasetTab() {
       await fetch(`${baseUrl}/datasets/train`, { method: 'POST', headers })
       setTrainingStatus('training')
     } catch {
-      setTrainingStatus('failed')
+      setTrainingStatus('idle')
+      setEnterpriseMsg('Custom RainNet training — Enterprise tier. Contact sales@arcovel.com')
     }
   }, [])
 
@@ -121,6 +127,12 @@ export default function DatasetTab() {
         <span className="text-xs font-semibold text-rain-teal uppercase tracking-widest">Dataset Manager</span>
         <span className="badge badge-gold ml-2">Enterprise</span>
       </div>
+
+      {enterpriseMsg && (
+        <div className="glass-panel rounded-lg p-4 text-center text-sm text-rain-teal mb-3">
+          {enterpriseMsg}
+        </div>
+      )}
 
       {!isEnterprise ? (
         <div className="glass-panel rounded-lg p-8 text-center">

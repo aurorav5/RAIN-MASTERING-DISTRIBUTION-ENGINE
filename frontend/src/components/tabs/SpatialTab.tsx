@@ -12,6 +12,7 @@ export default function SpatialTab() {
 
   // Atmos state
   const [atmosProcessing, setAtmosProcessing] = useState(false)
+  const [atmosError, setAtmosError] = useState<string | null>(null)
   const [atmosResult, setAtmosResult] = useState<{
     objectCount: number
     genreTemplate: string
@@ -24,6 +25,7 @@ export default function SpatialTab() {
   const handleApplySpatial = useCallback(async () => {
     if (!sessionId) return
     setAtmosProcessing(true)
+    setAtmosError(null)
     try {
       const res = await fetch(`${baseUrl}/sessions/${sessionId}/spatial`, {
         method: 'POST',
@@ -47,7 +49,7 @@ export default function SpatialTab() {
         hasBinaural: !!result.binaural_preview_url,
       })
     } catch {
-      // Feature may not be available for this tier
+      setAtmosError('Dolby Atmos processing requires Studio Pro tier and GPU backend.')
     } finally {
       setAtmosProcessing(false)
     }
@@ -215,6 +217,12 @@ export default function SpatialTab() {
               <><Globe size={12} /> Apply Spatial</>
             )}
           </button>
+
+          {atmosError && (
+            <div className="text-[10px] font-mono text-rain-magenta bg-rain-magenta/10 border border-rain-magenta/20 rounded px-3 py-2">
+              {atmosError}
+            </div>
+          )}
 
           {atmosResult && (
             <div className="space-y-2 pt-3 border-t border-rain-border">

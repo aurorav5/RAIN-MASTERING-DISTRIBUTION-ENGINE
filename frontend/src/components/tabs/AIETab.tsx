@@ -42,6 +42,7 @@ interface Preferences {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
+// Seed data — will be replaced by real AIE fingerprint API
 const MOCK_SESSIONS: Session[] = [
   {
     id: 1, title: 'Summer Anthem', date: '2026-03-15', genre: 'Electronic',
@@ -308,13 +309,20 @@ export function AIETab() {
   const [compareMode, setCompareMode] = useState(false)
   const [expandedSession, setExpandedSession] = useState<number | null>(null)
   const [historyFilter, setHistoryFilter] = useState<'all' | 'approved' | 'rejected' | string>('all')
-  const [preferences, setPreferences] = useState<Preferences>({
-    truePeakCeiling: -1.0,
-    bassMonoBelow: 80,
-    minLRA: 6,
-    saturationMode: 'tape',
-    customRules: '{\n  "never_boost_above_khz": 12,\n  "min_dynamic_range": 8\n}',
+  const [preferences, setPreferences] = useState<Preferences>(() => {
+    try {
+      const saved = localStorage.getItem('rain_aie_preferences')
+      if (saved) return JSON.parse(saved) as Preferences
+    } catch { /* ignore parse errors, use defaults */ }
+    return {
+      truePeakCeiling: -1.0,
+      bassMonoBelow: 80,
+      minLRA: 6,
+      saturationMode: 'tape',
+      customRules: '{\n  "never_boost_above_khz": 12,\n  "min_dynamic_range": 8\n}',
+    }
   })
+  const [prefsSaved, setPrefsSaved] = useState(false)
 
   const approvedSessions = sessions.filter((s) => s.approved)
   const userFingerprint = avgFingerprint(approvedSessions)
@@ -791,7 +799,16 @@ export function AIETab() {
               </div>
 
               <div className="flex items-center gap-3">
-                <button className="btn-primary">Save Preferences</button>
+                <button
+                  className="btn-primary"
+                  onClick={() => {
+                    localStorage.setItem('rain_aie_preferences', JSON.stringify(preferences))
+                    setPrefsSaved(true)
+                    setTimeout(() => setPrefsSaved(false), 2000)
+                  }}
+                >
+                  {prefsSaved ? 'Saved \u2713' : 'Save Preferences'}
+                </button>
                 <button
                   className="text-[10px] font-mono text-rain-dim hover:text-rain-teal transition-colors underline underline-offset-2"
                   onClick={() =>
