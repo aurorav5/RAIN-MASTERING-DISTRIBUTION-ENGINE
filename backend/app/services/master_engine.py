@@ -119,6 +119,7 @@ class AnalysisResult:
     timing_variance: float = 0.0
     transient_sharpness: float = 0.5
     tempo_bpm: float = 120.0
+    genre: str = "unknown"
 
 
 @dataclass
@@ -263,6 +264,59 @@ def compute_bass_energy_ratio(audio: NDArray[np.float64], sr: int) -> float:
     return float(np.sum(spectrum[bass_mask]) / total)
 
 
+def classify_genre_heuristic(
+    tempo_bpm: float,
+    spectral_centroid: float,
+    groove_score: float,
+    transient_sharpness: float,
+) -> str:
+    """Classify genre from audio features using a rule-based heuristic.
+
+    Decision tree based on tempo, spectral centroid (brightness), groove feel,
+    and transient attack characteristics.  Returns a lowercase genre slug
+    compatible with ``TargetState.from_genre`` profiles.
+
+    Mapping:
+      - High tempo (>140) + high centroid (>4500)              -> electronic
+      - High centroid (>5000) + sharp transients (>0.65)       -> rock
+      - Medium tempo (100-140) + moderate centroid (2500-5000)  -> pop
+      - Low tempo (<100) + low centroid (<2500)                 -> hiphop
+      - Very low centroid (<1800) + low tempo (<90)             -> ambient
+      - High groove (>0.7) + medium tempo                      -> funk_soul
+      - Default fallback                                       -> pop
+    """
+    # Ambient: very dark and slow
+    if spectral_centroid < 1800.0 and tempo_bpm < 90.0:
+        return "ambient"
+
+    # Electronic / EDM: fast and bright
+    if tempo_bpm > 140.0 and spectral_centroid > 4500.0:
+        return "electronic"
+
+    # Rock: bright with sharp transients
+    if spectral_centroid > 5000.0 and transient_sharpness > 0.65:
+        return "rock"
+
+    # Hip-hop / R&B: slow and dark
+    if tempo_bpm < 100.0 and spectral_centroid < 2500.0:
+        return "hiphop"
+
+    # Funk / Soul: strong groove in medium-tempo range
+    if groove_score > 0.7 and 90.0 <= tempo_bpm <= 135.0:
+        return "funk_soul"
+
+    # Afropop / House: moderate-fast tempo with high groove and warm centroid
+    if groove_score > 0.65 and tempo_bpm > 110.0 and spectral_centroid < 4500.0:
+        return "afropop_house"
+
+    # Pop: medium tempo with moderate brightness (broad catch-all)
+    if 100.0 <= tempo_bpm <= 140.0 and 2500.0 <= spectral_centroid <= 5000.0:
+        return "pop"
+
+    # Fallback
+    return "pop"
+
+
 def analyze(audio: NDArray[np.float64], sr: int, original_sr: int) -> AnalysisResult:
     """Run full analysis on normalized audio, including groove metrics."""
     meter = pyln.Meter(sr)
@@ -281,6 +335,14 @@ def analyze(audio: NDArray[np.float64], sr: int, original_sr: int) -> AnalysisRe
     groove_engine = GrooveEngine(sample_rate=sr)
     groove = groove_engine.analyze(audio)
 
+    # Genre classification heuristic (populates genre automatically)
+    genre = classify_genre_heuristic(
+        tempo_bpm=groove.tempo_bpm,
+        spectral_centroid=sc,
+        groove_score=groove.groove_score,
+        transient_sharpness=groove.transient_sharpness,
+    )
+
     return AnalysisResult(
         input_lufs=lufs,
         input_true_peak=tp,
@@ -297,6 +359,7 @@ def analyze(audio: NDArray[np.float64], sr: int, original_sr: int) -> AnalysisRe
         timing_variance=groove.timing_variance,
         transient_sharpness=groove.transient_sharpness,
         tempo_bpm=groove.tempo_bpm,
+        genre=genre,
     )
 
 

@@ -16,6 +16,7 @@ class ReleaseCreateRequest(BaseModel):
     explicit: bool = False
     ai_generated: bool = False
     ai_source: Optional[str] = None  # "suno", "udio", "other"
+    isrc: Optional[str] = None  # Pre-assigned ISRC; auto-generated if omitted
 
 
 class ReleaseResponse(BaseModel):

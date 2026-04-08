@@ -84,6 +84,56 @@ def _ean13_check_digit(digits: str) -> int:
     return (10 - total % 10) % 10
 
 
+# ---------------------------------------------------------------------------
+# Lightweight in-memory ISRC generator (no DB required)
+# Used for prototype / mock flows where the DB counter is unavailable.
+# Format: CC-XXX-YY-NNNNN
+#   CC    = country code (ZA for South Africa / ARCOVEL)
+#   XXX   = registrant code (ARC for ARCOVEL)
+#   YY    = 2-digit year
+#   NNNNN = 5-digit sequential number
+# ---------------------------------------------------------------------------
+_isrc_in_memory_counter: int = 0
+
+
+def generate_isrc(
+    country: str = "ZA",
+    registrant: str = "ARC",
+    year: int | None = None,
+) -> str:
+    """Generate the next sequential ISRC without a database.
+
+    Returns the ISRC in the canonical 12-character format (no hyphens)
+    as required by ISO 3901: CCXXXYYNNNNN.
+
+    Thread-safety note: adequate for single-process prototype use.
+    Production should use :func:`allocate_isrc` with the DB counter.
+    """
+    global _isrc_in_memory_counter
+    _isrc_in_memory_counter += 1
+
+    if year is None:
+        year = datetime.now().year % 100
+
+    country = country[:2].upper()
+    registrant = registrant[:3].upper()
+
+    if _isrc_in_memory_counter > 99999:
+        raise RuntimeError(
+            "RAIN-E710 in-memory ISRC range exhausted (>99999) — "
+            "use DB-backed allocate_isrc for production"
+        )
+
+    return f"{country}{registrant}{year:02d}{_isrc_in_memory_counter:05d}"
+
+
+def format_isrc_display(isrc: str) -> str:
+    """Format a 12-character ISRC into the human-readable CC-XXX-YY-NNNNN form."""
+    if len(isrc) != 12:
+        return isrc
+    return f"{isrc[:2]}-{isrc[2:5]}-{isrc[5:7]}-{isrc[7:12]}"
+
+
 def validate_isrc(isrc: str) -> bool:
     """Validate ISRC format per ISO 3901."""
     if len(isrc) != 12:

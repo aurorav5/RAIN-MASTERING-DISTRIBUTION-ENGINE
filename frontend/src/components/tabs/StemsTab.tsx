@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { TierGate } from '../common/TierGate'
+import { api } from '@/utils/api'
+import { useSessionStore } from '@/stores/session'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -145,8 +147,13 @@ export default function StemsTab() {
   const [masterGain, setMasterGain] = useState(0)
   const [sailEnabled, setSailEnabled] = useState(false)
   const [inferenceBackend] = useState<'WEBGPU' | 'WASM'>('WEBGPU')
+  const [separationError, setSeparationError] = useState<string | null>(null)
 
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const inputBuffer = useSessionStore((s) => s.inputBuffer)
+  const fileName = useSessionStore((s) => s.fileName)
 
   // Compute which stems are audible considering solo/mute logic
   const hasSolo = stems.some((s) => s.solo)
@@ -170,34 +177,89 @@ export default function StemsTab() {
     )
   }, [])
 
-  const startSeparation = useCallback(() => {
+  const startSeparation = useCallback(async () => {
     if (separationStatus === 'separating') return
     setSeparationStatus('separating')
     setProgress(0)
     setStepIndex(0)
+    setSeparationError(null)
 
-    let p = 0
-    let step = 0
-    progressRef.current = setInterval(() => {
-      p += 1.2
-      if (p >= 100) {
-        p = 100
-        clearInterval(progressRef.current!)
-        setSeparationStatus('ready')
-      } else {
-        const newStep = Math.floor((p / 100) * SEPARATION_STEPS.length)
-        if (newStep !== step && newStep < SEPARATION_STEPS.length) {
-          step = newStep
-          setStepIndex(step)
-        }
+    try {
+      // Build a File from the session input buffer
+      const buf = inputBuffer
+      if (!buf) {
+        setSeparationError('No audio file loaded. Upload a file first.')
+        setSeparationStatus('idle')
+        return
       }
-      setProgress(p)
-    }, 60)
-  }, [separationStatus])
+      const file = new File([buf], fileName ?? 'audio.wav', { type: 'audio/wav' })
+
+      // Step 1: Upload to separation endpoint
+      setStepIndex(0)
+      const uploadRes = await api.separate.upload(file)
+
+      // Handle unavailable (no GPU)
+      if (uploadRes.status === 'unavailable') {
+        setSeparationError(
+          'BS-RoFormer requires GPU backend. Separation available for Creator+ tier with cloud processing.'
+        )
+        setSeparationStatus('idle')
+        return
+      }
+
+      const jobId = uploadRes.job_id
+      if (!jobId) {
+        setSeparationError('Separation upload failed: no job ID returned.')
+        setSeparationStatus('idle')
+        return
+      }
+
+      // Step 2: Poll for status every 2 seconds
+      setStepIndex(1)
+      setProgress(10)
+
+      pollRef.current = setInterval(async () => {
+        try {
+          const statusRes = await api.separate.status(jobId)
+          const p = statusRes.progress ?? 0
+          setProgress(p)
+
+          // Map progress to step index
+          const newStep = Math.min(
+            Math.floor((p / 100) * SEPARATION_STEPS.length),
+            SEPARATION_STEPS.length - 1,
+          )
+          setStepIndex(newStep)
+
+          if (statusRes.status === 'complete') {
+            if (pollRef.current) clearInterval(pollRef.current)
+            setProgress(100)
+
+            // Step 3: Fetch stems
+            const stemsRes = await api.separate.stems(jobId)
+            // stems are ready
+            setSeparationStatus('ready')
+          } else if (statusRes.status === 'failed') {
+            if (pollRef.current) clearInterval(pollRef.current)
+            setSeparationError(statusRes.error ?? 'Separation failed.')
+            setSeparationStatus('idle')
+          }
+        } catch {
+          if (pollRef.current) clearInterval(pollRef.current)
+          setSeparationError('Failed to poll separation status.')
+          setSeparationStatus('idle')
+        }
+      }, 2000)
+    } catch {
+      setSeparationError('Separation request failed. Check your connection.')
+      setSeparationStatus('idle')
+    }
+  }, [separationStatus, inputBuffer, fileName])
 
   useEffect(() => {
     return () => {
       if (progressRef.current) clearInterval(progressRef.current)
+      if (pollRef.current) clearInterval(pollRef.current)
     }
   }, [])
 
@@ -271,6 +333,17 @@ export default function StemsTab() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* ── Separation Error ──────────────────────────────────────────────── */}
+        {separationError && (
+          <div className="panel-card">
+            <div className="panel-card-body">
+              <p className="text-[10px] font-mono text-rain-magenta bg-rain-magenta/10 border border-rain-magenta/20 rounded px-3 py-2">
+                {separationError}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* ── Stem Mixer ───────────────────────────────────────────────────── */}
         <div className="space-y-2">

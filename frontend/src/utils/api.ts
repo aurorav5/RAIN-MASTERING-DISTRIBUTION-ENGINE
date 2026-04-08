@@ -186,6 +186,23 @@ export const api = {
     qcReport: (sessionId: string) =>
       request<QCReportData>(`/master/${sessionId}/qc`),
   },
+  separate: {
+    upload: (file: File) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      return request<{ job_id?: string; status: string; filename?: string; reason?: string; message?: string }>(
+        '/separate/upload', { method: 'POST', body: fd }, true,
+      )
+    },
+    status: (jobId: string) =>
+      request<{ job_id: string; status: string; progress: number; stems: Record<string, { status: string }>; error: string | null }>(
+        `/separate/${jobId}/status`,
+      ),
+    stems: (jobId: string) =>
+      request<{ job_id: string; status: string; stems: Array<{ name: string; status: string; download_url: string | null }> }>(
+        `/separate/${jobId}/stems`,
+      ),
+  },
   qc: {
     platforms: () => request<PlatformTargetData[]>('/qc/platforms'),
   },

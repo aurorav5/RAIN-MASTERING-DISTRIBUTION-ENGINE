@@ -26,7 +26,7 @@ const ROADMAP: RoadmapItem[] = [
   {
     version: 'v6.1',
     title: 'Intelligence',
-    status: 'in-progress',
+    status: 'shipped',
     items: [
       'RainNet v2 ML inference (ONNX)',
       'Genre-aware parameter prediction',
@@ -38,7 +38,7 @@ const ROADMAP: RoadmapItem[] = [
   {
     version: 'v6.2',
     title: 'Immersive',
-    status: 'planned',
+    status: 'in-progress',
     items: [
       'Dolby Atmos spatial rendering',
       'Binaural monitoring preview',
@@ -50,7 +50,7 @@ const ROADMAP: RoadmapItem[] = [
   {
     version: 'v6.3',
     title: 'Distribution',
-    status: 'planned',
+    status: 'in-progress',
     items: [
       'DDEX ERN 4.3 delivery',
       'LabelGrid integration',

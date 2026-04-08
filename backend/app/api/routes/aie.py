@@ -6,6 +6,7 @@ from uuid import UUID
 from app.core.database import get_db
 from app.api.dependencies import get_current_user, CurrentUser, require_tier
 from app.models.aie import AIEProfile, validate_voice_vector
+from app.api.routes.master import _sessions as mastering_sessions
 import structlog
 import json
 import hashlib
@@ -140,3 +141,75 @@ async def reference_match(
         "target_vector": target_vector,
         "interpolation": "50% user + 50% reference" if profile and profile.session_count >= 5 else "reference only (cold start)",
     }
+
+
+def _compute_fingerprint(analysis, result) -> list[float]:
+    """Compute an 8-dimensional AIE fingerprint vector from mastering session data.
+
+    Vector layout:
+        [input_lufs, output_lufs, spectral_centroid/10000, tempo_bpm/200,
+         groove_score, transient_sharpness, stereo_width, output_stereo_width]
+
+    Values are normalised to roughly [0, 1] range where applicable.
+    """
+    input_lufs = getattr(analysis, "input_lufs", 0.0)
+    output_lufs = getattr(result, "output_lufs", 0.0) if result else 0.0
+    spectral_centroid = getattr(analysis, "spectral_centroid", 0.0) / 10000.0
+    tempo_bpm = getattr(analysis, "tempo_bpm", 120.0) / 200.0
+    groove_score = getattr(analysis, "groove_score", 0.5)
+    transient_sharpness = getattr(analysis, "transient_sharpness", 0.5)
+    stereo_width = getattr(analysis, "stereo_width", 0.0)
+    output_stereo_width = getattr(result, "output_stereo_width", 0.0) if result else 0.0
+
+    vec = [
+        input_lufs,
+        output_lufs,
+        spectral_centroid,
+        tempo_bpm,
+        groove_score,
+        transient_sharpness,
+        stereo_width,
+        output_stereo_width,
+    ]
+    # Pad to 8 dimensions (already 8, but guard future changes)
+    while len(vec) < 8:
+        vec.append(0.0)
+    return [round(v, 6) for v in vec[:8]]
+
+
+@router.get("/sessions")
+async def get_aie_sessions(
+    current_user: CurrentUser = Depends(get_current_user),
+) -> list[dict]:
+    """Return mastering session history with AIE fingerprint data.
+
+    Reads from the in-memory mastering session store and computes a simple
+    fingerprint vector for each completed session from its analysis data.
+    """
+    sessions_out: list[dict] = []
+    for session_id, session in mastering_sessions.items():
+        if session.get("status") != "complete":
+            continue
+
+        analysis = session.get("analysis")
+        result = session.get("result")
+        if analysis is None:
+            continue
+
+        fingerprint = _compute_fingerprint(analysis, result)
+
+        sessions_out.append({
+            "session_id": session_id,
+            "filename": session.get("filename", ""),
+            "status": session["status"],
+            "input_lufs": round(getattr(analysis, "input_lufs", 0.0), 1),
+            "output_lufs": round(getattr(result, "output_lufs", 0.0), 1) if result else None,
+            "spectral_centroid": round(getattr(analysis, "spectral_centroid", 0.0), 1),
+            "tempo_bpm": round(getattr(analysis, "tempo_bpm", 120.0), 1),
+            "groove_score": round(getattr(analysis, "groove_score", 0.5), 3),
+            "transient_sharpness": round(getattr(analysis, "transient_sharpness", 0.5), 3),
+            "stereo_width": round(getattr(analysis, "stereo_width", 0.0), 3),
+            "fingerprint": fingerprint,
+        })
+
+    return sessions_out

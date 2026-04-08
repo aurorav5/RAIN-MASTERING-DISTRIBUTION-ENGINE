@@ -1,5 +1,6 @@
 """Distribution pipeline routes."""
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 from uuid import UUID
@@ -10,9 +11,10 @@ from app.models.session import Session as MasteringSession
 from app.models.cert import RainCert
 from app.models.release import Release
 from app.schemas.release import ReleaseCreateRequest, ReleaseResponse
-from app.services.identifiers import allocate_isrc, allocate_upc
+from app.services.identifiers import allocate_isrc, allocate_upc, generate_isrc
 from app.services.ddex import generate_ddex_ern43, AIDisclosure
 from app.services import labelgrid
+from app.api.routes.master import _sessions as mastering_sessions
 import structlog
 
 logger = structlog.get_logger()
@@ -54,7 +56,14 @@ async def create_release(
         raise HTTPException(400, detail={"code": "RAIN-E600", "message": "RAIN-CERT not issued — wait for certification to complete"})
 
     # 3. Allocate sequential ISRC + UPC from DB counters (ISO 3901 / GS1 compliance)
-    isrc = await allocate_isrc(db)
+    #    If the caller supplied a pre-assigned ISRC, use it; otherwise auto-generate.
+    if req.isrc:
+        from app.services.identifiers import validate_isrc
+        if not validate_isrc(req.isrc):
+            raise HTTPException(400, detail={"code": "RAIN-E710", "message": "Invalid ISRC format"})
+        isrc = req.isrc
+    else:
+        isrc = await allocate_isrc(db)
     upc = await allocate_upc(db)
 
     # 4. Generate DDEX ERN 4.3 XML
@@ -195,3 +204,83 @@ async def get_release_status(
             logger.warning("labelgrid_status_failed", error=str(e), error_code="RAIN-E600")
 
     return {"release_id": str(release_id), "status": release.labelgrid_status or "unknown"}
+
+
+@router.get("/{release_id}/ddex")
+async def get_ddex_xml(
+    release_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Generate DDEX ERN 4.3.2 XML for a release.
+
+    If the release exists in the database, its stored DDEX XML is returned.
+    Otherwise, if release_id matches a mastering session, a mock DDEX XML
+    is generated from the session's analysis and metadata.
+    """
+    await db.execute(text("SELECT set_app_user_id(:uid::uuid)"), {"uid": str(current_user.user_id)})
+
+    # Try DB first
+    try:
+        release_uuid = UUID(release_id)
+        result = await db.execute(
+            select(Release).where(
+                Release.id == release_uuid,
+                Release.user_id == current_user.user_id,
+            )
+        )
+        release = result.scalar_one_or_none()
+        if release and release.ddex_xml:
+            return Response(
+                content=release.ddex_xml,
+                media_type="application/xml",
+                headers={"Content-Disposition": f'attachment; filename="ddex_{release_id}.xml"'},
+            )
+    except (ValueError, AttributeError):
+        # release_id is not a valid UUID — fall through to session lookup
+        pass
+
+    # Fall back to in-memory mastering session for mock generation
+    session = mastering_sessions.get(release_id)
+    if not session:
+        raise HTTPException(404, detail={"code": "RAIN-E600", "message": "Release or session not found"})
+
+    analysis = session.get("analysis")
+    metadata = session.get("metadata", {})
+    master_result = session.get("result")
+
+    title = metadata.get("title") or session.get("filename", "Untitled")
+    artist_name = metadata.get("artist") or "Unknown Artist"
+    genre = metadata.get("genre") or "Other"
+    duration_seconds = int(getattr(analysis, "duration", 0)) if analysis else 0
+
+    # Generate a session-derived ISRC for the mock
+    isrc = generate_isrc()
+
+    ai_disclosure = AIDisclosure(
+        mixing_mastering_ai=True,
+        mixing_mastering_tool="RAIN",
+        overall_ai_involvement="partial",
+    )
+
+    ddex_xml = generate_ddex_ern43(
+        release_id=release_id,
+        title=title,
+        artist_name=artist_name,
+        isrc=isrc,
+        upc="0000000000000",
+        audio_file_path=session.get("input_path", ""),
+        audio_sha256="",
+        duration_seconds=duration_seconds,
+        genre=genre,
+        release_date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        territory="Worldwide",
+        ai_disclosure=ai_disclosure,
+        label_name=metadata.get("label", "ARCOVEL RAIN Distribution"),
+    )
+
+    return Response(
+        content=ddex_xml,
+        media_type="application/xml",
+        headers={"Content-Disposition": f'attachment; filename="ddex_{release_id}.xml"'},
+    )
