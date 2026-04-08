@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS waitlist (
 )
 """)
 
+_table_ensured = False
+
 
 class WaitlistRequest(BaseModel):
     email: EmailStr
@@ -27,7 +29,10 @@ class WaitlistRequest(BaseModel):
 @router.post("/join")
 async def join_waitlist(req: WaitlistRequest, db: AsyncSession = Depends(get_db)) -> dict:
     """Add email to waitlist. Idempotent — re-submitting same email is a no-op."""
-    await db.execute(_CREATE_TABLE_SQL)
+    global _table_ensured
+    if not _table_ensured:
+        await db.execute(_CREATE_TABLE_SQL)
+        _table_ensured = True
     await db.execute(
         text(
             "INSERT INTO waitlist (email, referral_code) VALUES (:email, :code) "

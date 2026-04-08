@@ -223,7 +223,7 @@ async def _check_database() -> dict[str, Any]:
             error=str(exc),
             duration_ms=duration_ms,
         )
-        rain_error_total.labels(error_code="RAIN-E100").inc()
+        rain_error_total.labels(error_code="RAIN-E810").inc()
         return {"status": "error", "error": str(exc), "duration_ms": duration_ms}
 
 
@@ -252,7 +252,7 @@ async def _check_valkey() -> dict[str, Any]:
             error=str(exc),
             duration_ms=duration_ms,
         )
-        rain_error_total.labels(error_code="RAIN-E101").inc()
+        rain_error_total.labels(error_code="RAIN-E811").inc()
         return {"status": "error", "error": str(exc), "duration_ms": duration_ms}
 
 

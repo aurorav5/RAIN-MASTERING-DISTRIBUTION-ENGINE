@@ -94,9 +94,7 @@ class Settings(BaseSettings):
                 raise ValueError("S3_ACCESS_KEY must not use dev defaults in production")
         return self
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
+    model_config = {"env_file": ".env", "extra": "ignore"}
 
 
 settings = Settings()

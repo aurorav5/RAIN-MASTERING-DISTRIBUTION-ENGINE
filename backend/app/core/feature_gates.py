@@ -158,8 +158,8 @@ TIER_FEATURES: dict[SubscriptionTier, TierFeatures] = {
         distribution_intelligence=True,
         aie=True,
     ),
-    SubscriptionTier.STUDIO: TierFeatures(
-        tier=SubscriptionTier.STUDIO,
+    SubscriptionTier.STUDIO_PRO: TierFeatures(
+        tier=SubscriptionTier.STUDIO_PRO,
         max_upload_bytes=_500MB,
         output_formats=frozenset({
             "streaming_master", "hi_res_master", "binaural", "podcast",
@@ -217,7 +217,7 @@ _STATE_TO_TIER: dict[SubscriptionState, SubscriptionTier] = {
     SubscriptionState.ACTIVE_SPARK: SubscriptionTier.SPARK,
     SubscriptionState.ACTIVE_CREATOR: SubscriptionTier.CREATOR,
     SubscriptionState.ACTIVE_ARTIST: SubscriptionTier.ARTIST,
-    SubscriptionState.ACTIVE_STUDIO: SubscriptionTier.STUDIO,
+    SubscriptionState.ACTIVE_STUDIO_PRO: SubscriptionTier.STUDIO_PRO,
     SubscriptionState.ACTIVE_ENTERPRISE: SubscriptionTier.ENTERPRISE,
     SubscriptionState.PAST_DUE: SubscriptionTier.FREE,
     SubscriptionState.CANCELED: SubscriptionTier.FREE,

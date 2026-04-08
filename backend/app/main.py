@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
@@ -55,11 +53,7 @@ app.add_middleware(
 # Dev middleware: inject a synthetic enterprise user on every request so routes
 # that read request.state.user (rate limiter, tier checks, etc.) work without JWT.
 if settings.RAIN_ENV == "development":
-    _DEV_USER = CurrentUser(
-        user_id=UUID("00000000-0000-0000-0000-000000000001"),
-        tier="enterprise",
-        is_admin=True,
-    )
+    from app.api.dependencies import _DEV_USER
 
     class DevAuthMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request: Request, call_next):

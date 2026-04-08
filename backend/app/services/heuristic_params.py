@@ -15,7 +15,8 @@ from typing import Any
 from app.services.platform_targets import get_platform_target
 
 
-# Canonical ProcessingParams schema — 46 fields, MUST NOT CHANGE without Phil Bölke approval
+# Canonical ProcessingParams schema — 46 ONNX neurons decode to these fields.
+# sail_stem_gains is [12] (6 decoded + 6 zero-padded), saturation_mode is argmax of 3 logits.
 def default_params() -> dict[str, Any]:
     """Return the canonical ProcessingParams with all defaults per CLAUDE.md."""
     return {

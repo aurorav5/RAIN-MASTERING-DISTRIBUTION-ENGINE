@@ -185,11 +185,10 @@ When `RAIN_NORMALIZATION_VALIDATED=false`, the heuristic fallback MUST produce a
 `ProcessingParams` dict that conforms exactly to the canonical schema below.
 
 Output must be deterministic for the same `(genre, platform)` input pair.
-Genre-matched lookup tables are defined in `frontend/src/utils/heuristic-params.ts` (PART-5
-Task 5.10) and `backend/ml/rainnet/heuristics.py` (PART-4 Task 4.2). Both MUST use
-identical parameter names, identical genre values, and produce identical output for the
-same genre/platform combination. The PART-4 backend definition is AUTHORITATIVE — the
-frontend must match it exactly.
+Genre-matched lookup tables are defined in `frontend/src/utils/heuristic-params.ts`
+and `backend/ml/rainnet/heuristics.py`. Both MUST use identical parameter names,
+identical genre values, and produce identical output for the same genre/platform
+combination. The backend definition is AUTHORITATIVE — the frontend must match it exactly.
 
 ---
 
@@ -343,7 +342,7 @@ After completing each sub-phase task:
 
 ---
 
-## Pre-Flight Verification (MANDATORY — Run Before PART-1)
+## Pre-Flight Verification (MANDATORY — Run Before any work)
 
 Before executing any PART, produce a Pre-Flight Report containing:
 
@@ -356,7 +355,7 @@ Before executing any PART, produce a Pre-Flight Report containing:
 7. **The heuristic fallback** — list the minimum required output parameters
 
 **If any item is wrong, missing, or vague: re-read CLAUDE.md in full before proceeding.**
-Do not begin PART-1 until the Pre-Flight Report is complete and correct.
+Pre-Flight Report must be verified before starting work.
 
 Each subsequent PART begins with an Entry Checklist. Confirm every item before writing code.
 
@@ -434,7 +433,6 @@ RAIN_CERT_SIGNING_KEY_PATH=/etc/rain/cert.key
 rain/
 ├── CLAUDE.md                    ← This file
 ├── BLUEPRINT-INDEX.md           ← Execution order
-├── PART-1.md … PART-12.md      ← Phase prompts
 ├── .cursorrules                 ← Cursor agent rules
 ├── .env.example
 ├── .gitignore

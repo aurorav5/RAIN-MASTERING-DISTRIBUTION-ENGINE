@@ -8,7 +8,7 @@ class SubscriptionState(str, Enum):
     ACTIVE_SPARK = "active_spark"
     ACTIVE_CREATOR = "active_creator"
     ACTIVE_ARTIST = "active_artist"
-    ACTIVE_STUDIO = "active_studio"
+    ACTIVE_STUDIO_PRO = "active_studio_pro"
     ACTIVE_ENTERPRISE = "active_enterprise"
     PAST_DUE = "past_due"
     CANCELED = "canceled"
@@ -21,7 +21,7 @@ class SubscriptionTier(str, Enum):
     SPARK = "spark"
     CREATOR = "creator"
     ARTIST = "artist"
-    STUDIO = "studio"
+    STUDIO_PRO = "studio_pro"
     ENTERPRISE = "enterprise"
 
 
