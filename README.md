@@ -1,6 +1,6 @@
 # R∞N — RAIN AI Mastering & Distribution Engine
 
-**Professional AI-powered audio mastering platform by [ARCOVEL Technologies International](mailto:engineering@arcovel.com)**
+**Professional AI-powered mastering and distribution engine by [ThatGuy Productions](mailto:engineering@arcovel.com) · Built on ARCOVEL Technologies International infrastructure**
 
 > *"Rain doesn't live in the cloud."* The render engine runs on your machine. Audio never leaves your device during processing.
 
@@ -8,7 +8,7 @@
 
 ## What is RAIN?
 
-RAIN (R∞N) is a full-stack, local-first AI mastering platform that brings studio-grade audio mastering to independent artists and labels. It combines a deterministic C++/WASM DSP render engine with cloud-based AI inference, cryptographic provenance certificates, and direct streaming platform distribution — all in one product.
+RAIN (R∞N) is a full-stack, local-first AI mastering and distribution engine that brings studio-grade audio mastering to independent artists and labels. It combines a deterministic C++/WASM DSP render engine with cloud-based AI inference, cryptographic provenance certificates, and direct streaming platform distribution — all in one product.
 
 **Beyond LANDR. Beyond iZotope. Beyond anything that came before.**
 
@@ -55,7 +55,7 @@ Same input + same params + same WASM binary = **bit-identical output**, every ti
 
 ### Core Mastering
 
-- **7-stage DSP chain**: normalize → EQ → multiband compress → stereo widening → limiting → export
+- **16-stage DSP chain**: format normalization → provenance record → feature extraction → AI inference → reference matching → spectral repair → source separation → per-stem repair → per-stem processing → master bus → loudness targeting → spatial rendering → QC validation → forensics watermark → output packaging
 - **43-dimensional feature extraction** across 6 groups: Loudness (5), Dynamics (6), Spectral (16), Stereo (7), Transient (5), Tonal (4)
 - **18 automated QC checks** with auto-remediation for critical issues
 - **27 platform loudness targets**: Spotify −14 LUFS, Apple Music −16, Dolby Atmos −18, CD −9, vinyl, broadcast, podcast, and more
@@ -148,11 +148,12 @@ BS-RoFormer SW cascaded 4-pass pipeline (replaces Demucs v4):
 
 | Tier | Price | Renders | Key Features |
 |------|-------|---------|--------------|
-| **Free** | $0 | 0 (listen only) | WASM mastering, real-time preview, RAIN Score |
-| **Spark** | $9 / mo | 50 downloads | Full-resolution export, WAV / FLAC / MP3, Simple Mode |
-| **Creator** | $29 / mo | 10 renders | Stem separation, Claude AI (10/mo), Artist Identity Engine |
-| **Artist** | $59 / mo | 25 renders | DAW plugin, Distribution Intelligence, RAIN-CERT |
-| **Studio Pro** | $149 / mo | 75 renders | Dolby Atmos, DDEX / DDP, vinyl mastering, collaboration |
+| **Casual** | $0 | 0 (listen only) | WASM mastering, real-time preview, RAIN Score |
+| **Creator** | $9 / mo | 50 downloads | Full-resolution export, WAV / FLAC / MP3, Simple Mode |
+| **Independent Artist** | $29 / mo | 10 renders | Stem separation, Claude AI (10/mo), Artist Identity Engine |
+| **Producer** | $59 / mo | 25 renders | DAW plugin, Distribution Intelligence, RAIN-CERT |
+| **Studio** | $149 / mo | 75 renders | Dolby Atmos, DDEX / DDP, vinyl mastering, collaboration |
+| **Label / Distributor** | $349 / mo | 300 renders | Multi-artist roster, batch processing, LabelGrid direct |
 | **Enterprise** | Custom | Unlimited | Custom RainNet LoRA, white-label API, dedicated support |
 
 Annual discount: ~20%. Contact [engineering@arcovel.com](mailto:engineering@arcovel.com?subject=RAIN%20Enterprise%20Inquiry) for enterprise licensing.
@@ -323,7 +324,7 @@ RAIN-MASTERING-DISTRIBUTION-ENGINE/
 ├── nginx/                     Reverse proxy config
 ├── scripts/                   Setup, model download, preflight utilities
 ├── CLAUDE.md                  Immutable architecture specification
-├── RAIN-BLUEPRINT.md          Full system blueprint
+├── plan.md                    Implementation plan — all 6 batches complete
 ├── BUILD-DESKTOP-EXE.md       Desktop build instructions
 ├── docker-compose.yml         Full production stack
 ├── docker-compose.gpu.yml     GPU worker stack (BS-RoFormer)
