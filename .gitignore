@@ -73,3 +73,13 @@ rain-tests/test_report.md
 *.exe
 build-exe/dist/
 build-exe/build_tmp/
+
+# Large binary model weights — stored in GitHub Releases, not source tree
+models/*.onnx.data
+models/*.pt
+models/*.pth
+models/*.ckpt
+
+# Compiled installer binaries — stored in GitHub Releases
+*.exe
+build-exe/dist/
