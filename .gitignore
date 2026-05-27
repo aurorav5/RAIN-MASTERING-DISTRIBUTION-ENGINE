@@ -68,3 +68,8 @@ Thumbs.db
 
 # Auto-generated test reports
 rain-tests/test_report.md
+
+# Compiled installer
+*.exe
+build-exe/dist/
+build-exe/build_tmp/
