@@ -59,9 +59,12 @@ training_manifest.jsonl
 training_monitor.log
 
 # Claude Code local
-.claude/launch.json.local-backup
+.claude/
 frontend/.claude/
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Auto-generated test reports
+rain-tests/test_report.md
