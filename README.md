@@ -171,7 +171,7 @@ Annual discount: ~20%. Contact [engineering@arcovel.com](mailto:engineering@arco
 ### Quickstart (Docker)
 
 ```bash
-git clone https://github.com/aurorav5/RAIN-MASTERING-DISTRIBUTION-ENGINE.git
+git clone https://github.com/thatguyproductions/RAIN-MASTERING-DISTRIBUTION-ENGINE.git
 cd RAIN-MASTERING-DISTRIBUTION-ENGINE
 
 # Copy and configure environment

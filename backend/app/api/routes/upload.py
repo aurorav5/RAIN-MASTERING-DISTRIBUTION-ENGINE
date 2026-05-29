@@ -20,6 +20,34 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 ACCEPTED_FORMATS = {".wav", ".flac", ".aiff", ".aif", ".mp3", ".m4a"}
 MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024  # 500 MB
 
+# Magic byte signatures for accepted audio formats.
+# Checked against actual file content — not just the extension.
+# RAIN-E202: extension/content mismatch → rejected.
+_MAGIC_SIGNATURES: list[tuple[bytes, int]] = [
+    (b"RIFF", 0),        # WAV  — bytes 0-3
+    (b"fLaC", 0),        # FLAC — bytes 0-3
+    (b"FORM", 0),        # AIFF — bytes 0-3 (AIFF/AIFF-C)
+    (b"\xff\xfb", 0),    # MP3  — MPEG1 Layer3, no ID3
+    (b"\xff\xf3", 0),    # MP3  — MPEG2 Layer3
+    (b"\xff\xf2", 0),    # MP3  — MPEG2.5 Layer3
+    (b"ID3",  0),        # MP3  — ID3v2 tag prefix
+    (b"\x00\x00\x00\x18ftypM4A ", 0),  # M4A — ISO base media (18-byte box)
+    (b"\x00\x00\x00\x20ftypM4A ", 0),  # M4A — 32-byte ftyp box variant
+    (b"ftypM4A ", 4),    # M4A — ftyp at offset 4 (variable box size)
+]
+
+
+def _validate_magic_bytes(data: bytes) -> bool:
+    """Return True if data starts with a recognised audio magic signature."""
+    for signature, offset in _MAGIC_SIGNATURES:
+        end = offset + len(signature)
+        if len(data) >= end and data[offset:end] == signature:
+            return True
+    # M4A: ftyp box can appear at offset 4 with any 4-byte size prefix
+    if len(data) >= 12 and data[4:8] == b"ftyp":
+        return True
+    return False
+
 
 @router.post("/", response_model=Union[SessionResponse, FreeSessionResponse], status_code=201)
 @limiter.limit(dynamic_limit)
@@ -37,6 +65,21 @@ async def create_session(
     data = await file.read()
     if len(data) > MAX_FILE_SIZE_BYTES:
         raise HTTPException(413, detail={"code": "RAIN-E201", "message": "File exceeds 500 MB limit"})
+
+    # Magic byte validation — reject files whose content doesn't match
+    # the declared extension. Prevents disguised uploads regardless of
+    # what the client sends as the filename. (RAIN-E202)
+    if not _validate_magic_bytes(data):
+        logger.warning(
+            "upload_magic_byte_mismatch",
+            user_id=str(current_user.user_id),
+            declared_ext=ext,
+            error_code="RAIN-E202",
+        )
+        raise HTTPException(
+            415,
+            detail={"code": "RAIN-E202", "message": "File content does not match declared audio format"},
+        )
 
     file_hash = hashlib.sha256(data).hexdigest()
 

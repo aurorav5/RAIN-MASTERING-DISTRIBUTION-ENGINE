@@ -134,7 +134,7 @@ class ClaudeService:
             api_key=settings.ANTHROPIC_API_KEY,
             timeout=_TIMEOUT_S,
         )
-        self.model = "claude-sonnet-4-6"
+        self.model = "claude-sonnet-4-20250514"
 
     async def _call_with_retry(
         self,
