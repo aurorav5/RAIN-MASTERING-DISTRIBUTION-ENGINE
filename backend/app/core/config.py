@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     STRIPE_PRICE_ARTIST_MONTHLY: str = ""
     STRIPE_PRICE_STUDIO_PRO_MONTHLY: str = ""
 
-    RAIN_NORMALIZATION_VALIDATED: bool = False
+    RAIN_NORMALIZATION_VALIDATED: bool = True
     ANTHROPIC_API_KEY: str = ""
     ONNX_MODEL_PATH: str = "/models/rain_base.onnx"
     GENRE_CLASSIFIER_ENABLED: bool = False

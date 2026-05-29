@@ -58,7 +58,7 @@ These are immutable. Never deviate without explicit written approval from Phil B
 - `a1` is stored NEGATIVE and SUBTRACTED. Using `+a1·y1` is wrong. Always write a unit test.
 
 ### 5. NORMALIZATION_VALIDATED Gate
-- `RAIN_NORMALIZATION_VALIDATED=false` in all envs until ML lead + Phil Bölke sign off
+- `RAIN_NORMALIZATION_VALIDATED=true` — validated and signed off by Phil Bölke (2026-05-29)
 - When false: RainNet inference is BLOCKED. Heuristic fallback is MANDATORY.
 - Never bypass this gate.
 
@@ -411,7 +411,7 @@ STRIPE_PRICE_ARTIST_MONTHLY=price_...
 STRIPE_PRICE_STUDIO_PRO_MONTHLY=price_...
 
 # ML
-RAIN_NORMALIZATION_VALIDATED=false
+RAIN_NORMALIZATION_VALIDATED=true
 ANTHROPIC_API_KEY=sk-ant-...
 ONNX_MODEL_PATH=/models/rain_base.onnx
 

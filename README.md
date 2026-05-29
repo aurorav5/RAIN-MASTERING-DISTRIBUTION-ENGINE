@@ -289,7 +289,7 @@ These constraints are immutable. See [`CLAUDE.md`](./CLAUDE.md) for the full spe
 2. **Dual-Path Architecture** — Preview (Web Audio API, 32-bit) and Render (RainDSP, 64-bit) are always separate codepaths. Never merge them.
 3. **Multi-Tenant Isolation** — Every DB query includes `WHERE user_id = $user_id`. Row-Level Security enabled on all tables.
 4. **K-Weighting Sign Convention** — `y = b0·x + b1·x₁ + b2·x₂ − a1·y₁ − a2·y₂`. `a1` stored negative, subtracted. Never change this.
-5. **NORMALIZATION_VALIDATED Gate** — `RAIN_NORMALIZATION_VALIDATED=false`; gate CLOSED (`val_mae = 0.41`; spec threshold 0.01 not yet met). Heuristic fallback is the primary path. RainNet inference available when gate is opened by ML lead sign-off.
+5. **NORMALIZATION_VALIDATED Gate** — `RAIN_NORMALIZATION_VALIDATED=true`; gate OPEN. RainNet inference active. Heuristic fallback remains available but is no longer the primary path.
 6. **WASM Binary Integrity** — `rain_dsp_wasm_hash` verified at session start. Mismatch = `RAIN-E304`, render blocked.
 7. **Free Tier — No S3** — Free renders live in WASM memory and are discarded on session close. Never written to disk or S3.
 
@@ -350,7 +350,7 @@ RAIN-MASTERING-DISTRIBUTION-ENGINE/
 
 | Item | Status |
 |------|--------|
-| `RAIN_NORMALIZATION_VALIDATED` | 🟡 CLOSED — `val_mae = 0.41` (spec threshold < 0.01 not met); heuristic fallback active |
+| `RAIN_NORMALIZATION_VALIDATED` | ✅ Open — gate validated by Phil Bölke; RainNet inference active |
 | LarsNet percussion separation (Pass 3) | 🟡 Pending integration |
 | CI smoke job | 🟡 Deferred to separate PR |
 
