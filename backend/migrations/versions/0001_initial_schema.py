@@ -126,7 +126,7 @@ def upgrade() -> None:
             file_key TEXT NOT NULL,
             file_hash TEXT NOT NULL,
             duration_ms INTEGER,
-            source TEXT CHECK (source IN ('uploaded','demucs','suno','udio')),
+            source TEXT CHECK (source IN ('uploaded','demucs','bsroformer','suno','udio')),
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     """)

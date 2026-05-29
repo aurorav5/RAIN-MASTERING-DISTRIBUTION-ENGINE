@@ -55,7 +55,7 @@ async def suno_import(
     Suno Import Mode: upload up to 12 Suno-exported stems.
     - Auto-detects stem roles from filenames
     - Sets ai_generated=True, ai_source='suno' automatically
-    - No Demucs needed — stems already separated
+    - No BS-RoFormer needed — stems already separated
     - Free tier: no S3 storage, session held in memory
     """
     try:
@@ -129,7 +129,7 @@ async def suno_import(
         user_id=str(current_user.user_id),
     )
 
-    # Dispatch analysis — Suno stems skip Demucs (already separated)
+    # Dispatch analysis — Suno stems skip BS-RoFormer (already separated)
     if input_file_key:
         from app.tasks.analysis import analyze_session
         analyze_session.delay(str(session_id), str(current_user.user_id))

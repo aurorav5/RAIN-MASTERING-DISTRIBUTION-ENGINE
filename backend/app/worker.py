@@ -21,8 +21,7 @@ celery_app = Celery(
     include=[
         "app.tasks.analysis",
         "app.tasks.render",
-        "app.tasks.demucs",
-        "app.tasks.separation",
+        "app.tasks.separation",  # BS-RoFormer only — Demucs removed
         "app.tasks.certification",
         "app.tasks.content_scan",
         "app.tasks.distribution",
@@ -41,7 +40,6 @@ celery_app.conf.update(
         # GPU-bound separation/inference — routed by tier at dispatch time via
         # `apply_async(queue=queue_for_tier(user.tier))`. Defaults below are fallbacks.
         "app.tasks.separation.*": {"queue": "gpu_priority_medium"},
-        "app.tasks.demucs.*": {"queue": "gpu_priority_medium"},
         "app.tasks.render.*": {"queue": "gpu_priority_medium"},
         "app.tasks.lora_training.*": {"queue": "gpu_priority_high"},
         # IO/CPU-bound
